@@ -58,3 +58,6 @@ npm test
 The project utilizes [Husky](https://typicode.github.io/husky/) to execute actions before every commit. The pre-commit hook, located in [.husky/pre-commit](./.husky/pre-commit), lints the code and runs the API tests.
 
 Use at your own risk; not a supported MongoDB product
+
+## Notes
+This is a test change to verify PR creation functionality.
