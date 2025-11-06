@@ -3,5 +3,16 @@ export interface User {
     name: string;
     isAdmin: boolean;
     email?: string;
-    address?: string;
+    phone?: string;
+    membershipType?: string;
+    memberSince?: Date;
+    maxBorrowLimit?: number;
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        zipCode: string;
+        country?: string;
+    };
+    active?: boolean;
 }

@@ -12,7 +12,7 @@ const results = [];
 
 const userSchema = {
     bsonType: 'object',
-    required: ['name', 'isAdmin'],
+    required: ['name', 'isAdmin', 'email', 'membershipType', 'maxBorrowLimit', 'active'],
     properties: {
         name: {
             bsonType: 'string',
@@ -22,6 +22,44 @@ const userSchema = {
         isAdmin: {
             bsonType: 'bool',
             description: 'must be a boolean and is required'
+        },
+        email: {
+            bsonType: 'string',
+            pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
+            description: 'must be a valid email address and is required'
+        },
+        membershipType: {
+            bsonType: 'string',
+            enum: ['Standard', 'Premium', 'Student', 'Senior', 'Faculty'],
+            description: 'must be a valid membership type and is required'
+        },
+        maxBorrowLimit: {
+            bsonType: 'int',
+            minimum: 1,
+            maximum: 50,
+            description: 'must be an integer between 1 and 50 and is required'
+        },
+        active: {
+            bsonType: 'bool',
+            description: 'must be a boolean and is required'
+        },
+        phone: {
+            bsonType: 'string',
+            description: 'optional phone number'
+        },
+        memberSince: {
+            bsonType: 'date',
+            description: 'optional date when user became a member'
+        },
+        address: {
+            bsonType: 'object',
+            properties: {
+                street: { bsonType: 'string' },
+                city: { bsonType: 'string' },
+                state: { bsonType: 'string' },
+                zipCode: { bsonType: 'string' },
+                country: { bsonType: 'string' }
+            }
         }
     }
 };

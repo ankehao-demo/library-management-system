@@ -18,4 +18,9 @@ export interface BorrowedBook {
 
     borrowDate: string;
     dueDate: string;
+
+    renewalCount?: number;
+    lateFee?: number;
+    notes?: string;
+    notificationSent?: boolean;
 }

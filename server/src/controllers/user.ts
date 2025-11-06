@@ -10,7 +10,14 @@ class UserController {
 
         let user = await collections?.users?.findOne({ name: randomUsername });
         if (!user) {
-            const tempUser = { name: randomUsername, isAdmin: true };
+            const tempUser = { 
+                name: randomUsername, 
+                isAdmin: true,
+                email: `${randomUsername.toLowerCase().replace(' ', '.')}@library.test`,
+                membershipType: 'Standard',
+                maxBorrowLimit: 5,
+                active: true
+            };
             const result = await collections?.users?.insertOne(tempUser);
             user = Object.assign({}, tempUser, {_id: result?.insertedId});
         }

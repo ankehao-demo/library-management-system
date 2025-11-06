@@ -19,6 +19,7 @@ describe('Authors API', () => {
         available: 1,
         reviews: [],
         attributes: [],
+        condition: 'Good',
     };
 
     const author = {

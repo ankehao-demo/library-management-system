@@ -11,4 +11,29 @@ export interface Review {
      * Reference to the book collection.
      */
     bookId: string;
+
+    /**
+     * Reference to user who wrote the review
+     */
+    userId?: ObjectId;
+
+    /**
+     * Whether the review is from a verified borrower
+     */
+    verified: boolean;
+
+    /**
+     * Number of users who found this review helpful
+     */
+    helpful?: number;
+
+    /**
+     * Review moderation status
+     */
+    status: string;
+
+    /**
+     * Sentiment analysis result (from NLP)
+     */
+    sentiment?: string;
 }
