@@ -1,5 +1,6 @@
 # Env variables
 .env
+.envrc
 credentials.json
 
 # Compiled output
