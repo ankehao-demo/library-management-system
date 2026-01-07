@@ -1,0 +1,210 @@
+// Phase 1: PostgreSQL ERD Design for Library Management System
+// This file uses DBML (Database Markup Language) syntax
+// Render at: https://dbdiagram.io or https://dbdocs.io
+
+Project library_management_system {
+  database_type: 'PostgreSQL'
+  Note: 'Migration from MongoDB to PostgreSQL - Phase 1 Planning'
+}
+
+// =============================================================================
+// USERS TABLE
+// =============================================================================
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null, unique, note: 'Minimum 5 characters required']
+  is_admin boolean [not null, default: false]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    name
+    is_admin
+  }
+  
+  Note: 'Library users with admin privileges. Migrated from MongoDB users collection.'
+}
+
+// =============================================================================
+// AUTHORS TABLE
+// =============================================================================
+Table authors {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null]
+  sanitized_name varchar(255) [not null, unique, note: 'URL-friendly name']
+  aliases text[] [default: '{}', note: 'Alternative names for the author']
+  bio text
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    name
+    sanitized_name
+  }
+  
+  Note: 'Author information. Migrated from MongoDB authors collection.'
+}
+
+// =============================================================================
+// BOOKS TABLE
+// =============================================================================
+Table books {
+  isbn varchar(20) [pk, note: 'ISBN as natural primary key']
+  title varchar(500) [not null]
+  year integer
+  cover varchar(500) [note: 'URL to cover image']
+  genres varchar(100)[] [default: '{}']
+  pages integer
+  synopsis text
+  publisher varchar(255)
+  long_title varchar(500)
+  language varchar(50)
+  binding varchar(50)
+  total_inventory integer [not null, default: 0]
+  book_of_the_month boolean [default: false]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    title
+    year
+    publisher
+  }
+  
+  Note: 'Book catalog. Uses ISBN as primary key. Migrated from MongoDB books collection.'
+}
+
+// =============================================================================
+// BOOK_AUTHORS JUNCTION TABLE
+// =============================================================================
+Table book_authors {
+  id uuid [pk, default: `gen_random_uuid()`]
+  book_isbn varchar(20) [not null, ref: > books.isbn]
+  author_id uuid [not null, ref: > authors.id]
+  display_order integer [default: 0, note: 'Order for displaying multiple authors']
+  
+  indexes {
+    book_isbn
+    author_id
+    (book_isbn, author_id) [unique]
+  }
+  
+  Note: 'Junction table for many-to-many book-author relationship. Replaces embedded authors in MongoDB.'
+}
+
+// =============================================================================
+// BOOK_ATTRIBUTES TABLE
+// =============================================================================
+Table book_attributes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  book_isbn varchar(20) [not null, ref: > books.isbn]
+  key varchar(100) [not null]
+  value varchar(500) [not null]
+  
+  indexes {
+    book_isbn
+    key
+    (book_isbn, key) [unique]
+  }
+  
+  Note: 'Flexible key-value attributes for books. Implements attribute pattern from MongoDB.'
+}
+
+// =============================================================================
+// REVIEWS TABLE
+// =============================================================================
+Table reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  book_isbn varchar(20) [not null, ref: > books.isbn]
+  user_id uuid [ref: > users.id, note: 'Nullable - user may be deleted']
+  text text [not null]
+  reviewer_name varchar(255) [not null, note: 'Denormalized for display']
+  rating integer [note: 'Rating 1-5, nullable']
+  timestamp bigint [not null, note: 'Unix timestamp in milliseconds']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    book_isbn
+    user_id
+    rating
+    (timestamp) [name: 'idx_reviews_timestamp_desc']
+  }
+  
+  Note: 'Book reviews. Normalized from embedded reviews in MongoDB books collection.'
+}
+
+// =============================================================================
+// RESERVATIONS TABLE
+// =============================================================================
+Table reservations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  book_isbn varchar(20) [not null, ref: > books.isbn]
+  user_id uuid [not null, ref: > users.id]
+  expiration_date timestamp [not null, note: 'Reservation expires after 12 hours']
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    book_isbn
+    user_id
+    expiration_date
+    (book_isbn, user_id) [unique, note: 'One active reservation per user per book']
+  }
+  
+  Note: 'Book reservations. Split from polymorphic MongoDB issueDetails collection (recordType=reservation).'
+}
+
+// =============================================================================
+// BORROWED_BOOKS TABLE
+// =============================================================================
+Table borrowed_books {
+  id uuid [pk, default: `gen_random_uuid()`]
+  book_isbn varchar(20) [not null, ref: > books.isbn]
+  user_id uuid [not null, ref: > users.id]
+  borrow_date timestamp [not null]
+  due_date timestamp [not null, note: 'Default 21 days from borrow_date']
+  returned_date timestamp [note: 'Set when book is returned']
+  returned boolean [not null, default: false]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    book_isbn
+    user_id
+    returned
+    due_date
+    (book_isbn, user_id) [name: 'idx_borrowed_books_active', note: 'Partial index WHERE returned = FALSE']
+  }
+  
+  Note: 'Borrowed book records. Split from polymorphic MongoDB issueDetails collection (recordType=borrowedBook).'
+}
+
+// =============================================================================
+// MIGRATION ID MAPPING TABLE (Temporary)
+// =============================================================================
+Table migration_id_mapping {
+  id serial [pk]
+  collection_name varchar(50) [not null]
+  mongo_id varchar(50) [not null]
+  postgres_id uuid [not null]
+  migrated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    (collection_name, mongo_id) [unique]
+    postgres_id
+  }
+  
+  Note: 'Temporary table for tracking MongoDB ObjectId to PostgreSQL UUID mappings during migration.'
+}
+
+// =============================================================================
+// RELATIONSHIPS SUMMARY
+// =============================================================================
+// users -> reviews (one-to-many)
+// users -> reservations (one-to-many)
+// users -> borrowed_books (one-to-many)
+// books -> book_authors (one-to-many)
+// books -> book_attributes (one-to-many)
+// books -> reviews (one-to-many)
+// books -> reservations (one-to-many)
+// books -> borrowed_books (one-to-many)
+// authors -> book_authors (one-to-many)
