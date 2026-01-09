@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-await connectToDatabase(process.env.DATABASE_URI);
+await connectToDatabase();
 console.log('Connected to database!');
 
 app.get('/', (_, res) => res.sendStatus(200));

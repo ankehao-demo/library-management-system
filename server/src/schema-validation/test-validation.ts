@@ -1,24 +1,30 @@
 import '../load-env-vars.js';
-import { connectToDatabase, collections } from '../database.js';
+import { connectToDatabase, getSupabase } from '../database.js';
 
-const { DATABASE_URI } = process.env;
-
-console.log('Connecting to MongoDB Atlas...');
-await connectToDatabase(DATABASE_URI);
+console.log('Connecting to Supabase...');
+await connectToDatabase();
+const supabase = getSupabase();
 console.log('Connected!\n');
 
+console.log('Testing Postgres constraint validation...');
+
 try {
-    // eslint-disable-next-line
-    await collections?.users?.insertOne(<any>{
-        age: 25
+    const { error } = await supabase.from('users').insert({
+        name: 'ab'
     });
-}
-catch (error) {
-    console.log(error.message);
-    for (const validationMessage of error.errInfo.details.schemaRulesNotSatisfied) {
-        console.log(validationMessage);
+    
+    if (error) {
+        console.log('Validation error (expected):', error.message);
+        console.log('Constraint validation is working correctly.');
+        process.exit(0);
+    } else {
+        console.log('Warning: Insert succeeded when it should have failed validation.');
+        await supabase.from('users').delete().eq('name', 'ab');
+        process.exit(1);
     }
 }
-
-process.exit(1);
+catch (error) {
+    console.log('Error:', (error as Error).message);
+    process.exit(1);
+}
 

@@ -3,8 +3,8 @@ import assert from 'assert';
 import { users, books, getBaseUrl, cleanDatabase } from '../utils/testing-shared.js';
 import BookController from '../controllers/books.js';
 
-let adminJWT;
-let userJWT;
+let adminJWT: string;
+let userJWT: string;
 
 const bookController = new BookController();
 
@@ -34,7 +34,7 @@ describe('Books API', () => {
         );
 
         const getBooksResponse = await request(getBaseUrl())
-            .get(`/books/${book._id}`)
+            .get(`/books/${book.isbn}`)
             .expect(200)
             .expect('Content-Type', /json/);
 
@@ -51,7 +51,7 @@ describe('Books API', () => {
 
     it('Should retrieve documents', async () => {
         const response = await request(getBaseUrl())
-            .get(`/books/${book._id}`)
+            .get(`/books/${book.isbn}`)
             .expect(200)
             .expect('Content-Type', /json/);
 
@@ -60,7 +60,7 @@ describe('Books API', () => {
 
     it('Should update documents for admins', async () => {
         const updateReponse = await request(getBaseUrl())
-            .put(`/books/${book._id}`)
+            .put(`/books/${book.isbn}`)
             .set('Authorization', `Bearer ${adminJWT}`)
             .send({
                 ...book,
@@ -71,7 +71,7 @@ describe('Books API', () => {
         assert(updateReponse?.body?.message?.includes(bookController.success.UPDATED), 'Book was not updated');
 
         const getResponse = await request(getBaseUrl())
-            .get(`/books/${book._id}`)
+            .get(`/books/${book.isbn}`)
             .expect(200)
             .expect('Content-Type', /json/);
 
@@ -80,7 +80,7 @@ describe('Books API', () => {
 
     it('Should not let users update books', async () => {
         await request(getBaseUrl())
-            .put(`/books/${book._id}`)
+            .put(`/books/${book.isbn}`)
             .set('Authorization', `Bearer ${userJWT}`)
             .send({
                 ...book,
@@ -91,14 +91,14 @@ describe('Books API', () => {
 
     it('Should delete documents for admins', async () => {
         const response = await request(getBaseUrl())
-            .delete(`/books/${book._id}`)
+            .delete(`/books/${book.isbn}`)
             .set('Authorization', `Bearer ${adminJWT}`)
             .expect(202);
 
         assert(response?.body?.message?.includes(bookController.success.DELETED), 'Book was not deleted');
 
         const getBookReponse = await request(getBaseUrl())
-            .get(`/books/${book._id}`)
+            .get(`/books/${book.isbn}`)
             .expect(404);
 
         assert(getBookReponse?.body?.message?.includes(bookController.errors.NOT_FOUND), 'Book was not deleted');
@@ -106,7 +106,7 @@ describe('Books API', () => {
 
     it('Should not let users delete books; only admins', async () => {
         await request(getBaseUrl())
-            .delete(`/books/${book._id}`)
+            .delete(`/books/${book.isbn}`)
             .set('Authorization', `Bearer ${userJWT}`)
             .expect(403);
     });
@@ -130,7 +130,7 @@ describe('Books API', () => {
 
     it('Should return 400 for missing update data', async () => {
         const response = await request(getBaseUrl())
-            .put(`/books/${book._id}`)
+            .put(`/books/${book.isbn}`)
             .set('Authorization', `Bearer ${adminJWT}`)
             .expect(400);
 

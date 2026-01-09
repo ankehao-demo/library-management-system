@@ -1,10 +1,9 @@
-import { UpdateResult } from 'mongodb';
-import { collections } from '../database.js';
-import { BorrowedBook, IssueDetail, IssueDetailType, Reservation, ReservationBook, ReservationUser } from '../models/issue-detail.js';
+import { getSupabase } from '../database.js';
+import { BorrowedBook, IssueDetailType, Reservation, ReservationUser, ReservationWithDetails, BorrowedBookWithDetails } from '../models/issue-detail.js';
 import BookController from './books.js';
 import UserController from './user.js';
 import { User } from '../models/user.js';
-import { Book } from '../models/book.js';
+import { BookResponse } from '../models/book.js';
 
 const bookController = new BookController();
 const userController = new UserController();
@@ -30,84 +29,144 @@ class ReservationsController {
     RESERVATION_DURATION = 0.5; // 0.5 days -> 12 hours
     BORROWED_DURATION = 21; // days
 
-    private async getPagedIssueDetails(type: IssueDetailType, limit = 50, skip = 0) {
-        const filter = {
-            recordType: (type === IssueDetailType.BorrowedBook) ? 'borrowedBook' : 'reservation',
-        };
+    private async getPagedReservationsData(limit = 50, skip = 0): Promise<{ data: ReservationWithDetails[], totalCount: number }> {
+        const supabase = getSupabase();
 
-        const sortField = (type === IssueDetailType.BorrowedBook) ? 'borrowDate' : 'expirationDate';
+        const { count } = await supabase
+            .from('reservations')
+            .select('*', { count: 'exact', head: true });
 
-        const aggregationResult = await collections?.issueDetails?.aggregate([
-            {
-                $match: filter
-            },
-            {
-                $facet: {
-                    metadata: [{ $count: 'totalCount' }],
-                    data: [
-                        { $sort: { [sortField]: -1 } },
-                        { $skip: skip },
-                        { $limit: limit }
-                    ],
-                },
-            },
-        ]).toArray();
+        const { data, error } = await supabase
+            .from('reservations')
+            .select(`
+                *,
+                users (id, name),
+                books (isbn, title)
+            `)
+            .order('expiration_date', { ascending: false })
+            .range(skip, skip + limit - 1);
 
-        if (!aggregationResult || aggregationResult.length === 0) {
-            return [];
-        } else {
-            return {
-                data: aggregationResult[0]?.data,
-                totalCount: aggregationResult[0]?.metadata[0]?.totalCount
-            };
-        }
-    }
-
-    private async getIssueDetailsForUser(userId: string, type: IssueDetailType) {
-        const filter = {
-            '_id': new RegExp(`^${userId}${type}`)
-        };
-
-        if (type === IssueDetailType.BorrowedBook) {
-            filter['returned'] = false;
+        if (error) {
+            console.error('Error fetching reservations:', error);
+            return { data: [], totalCount: 0 };
         }
 
-        const issueDetails = await collections?.issueDetails?.find(filter).toArray();
+        const reservations: ReservationWithDetails[] = (data || []).map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            book_isbn: r.book_isbn,
+            expiration_date: r.expiration_date,
+            created_at: r.created_at,
+            user: r.users ? { id: r.users.id, name: r.users.name } : undefined,
+            book: r.books ? { isbn: r.books.isbn, title: r.books.title } : undefined
+        }));
 
-        return issueDetails;
+        return { data: reservations, totalCount: count || 0 };
     }
 
-    private getDueDate(type: string) {
+    private async getPagedBorrowsData(limit = 50, skip = 0): Promise<{ data: BorrowedBookWithDetails[], totalCount: number }> {
+        const supabase = getSupabase();
+
+        const { count } = await supabase
+            .from('borrowed_books')
+            .select('*', { count: 'exact', head: true })
+            .eq('returned', false);
+
+        const { data, error } = await supabase
+            .from('borrowed_books')
+            .select(`
+                *,
+                users (id, name),
+                books (isbn, title)
+            `)
+            .eq('returned', false)
+            .order('borrow_date', { ascending: false })
+            .range(skip, skip + limit - 1);
+
+        if (error) {
+            console.error('Error fetching borrowed books:', error);
+            return { data: [], totalCount: 0 };
+        }
+
+        const borrows: BorrowedBookWithDetails[] = (data || []).map(b => ({
+            id: b.id,
+            user_id: b.user_id,
+            book_isbn: b.book_isbn,
+            borrow_date: b.borrow_date,
+            due_date: b.due_date,
+            returned: b.returned,
+            returned_date: b.returned_date,
+            created_at: b.created_at,
+            user: b.users ? { id: b.users.id, name: b.users.name } : undefined,
+            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined
+        }));
+
+        return { data: borrows, totalCount: count || 0 };
+    }
+
+    private getDueDate(type: string): Date {
         const now = Date.now();
         const daysInMs = 1000 * 60 * 60 * 24;
         const duration = type === IssueDetailType.Reservation ? this.RESERVATION_DURATION : this.BORROWED_DURATION;
         const dueDate = new Date(now + daysInMs * duration);
-        return new Date(dueDate);
+        return dueDate;
     }
 
-    private getIssueDetailsId(bookId: string, userId: string, type: string) {
-        return `${userId}${type}${bookId}`;
+    public async getReservations(userId: string): Promise<ReservationWithDetails[]> {
+        const supabase = getSupabase();
+
+        const { data, error } = await supabase
+            .from('reservations')
+            .select(`
+                *,
+                books (isbn, title)
+            `)
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error('Error fetching user reservations:', error);
+            return [];
+        }
+
+        return (data || []).map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            book_isbn: r.book_isbn,
+            expiration_date: r.expiration_date,
+            created_at: r.created_at,
+            book: r.books ? { isbn: r.books.isbn, title: r.books.title } : undefined
+        }));
     }
 
-    private getReservationId(bookId: string, userId: string) {
-        return this.getIssueDetailsId(bookId, userId, IssueDetailType.Reservation);
+    public async getReservation(reservationId: string): Promise<ReservationWithDetails> {
+        const supabase = getSupabase();
+
+        const { data, error } = await supabase
+            .from('reservations')
+            .select(`
+                *,
+                users (id, name),
+                books (isbn, title)
+            `)
+            .eq('id', reservationId)
+            .single();
+
+        if (error || !data) {
+            throw new Error(this.errors.NOT_FOUND);
+        }
+
+        return {
+            id: data.id,
+            user_id: data.user_id,
+            book_isbn: data.book_isbn,
+            expiration_date: data.expiration_date,
+            created_at: data.created_at,
+            user: data.users ? { id: data.users.id, name: data.users.name } : undefined,
+            book: data.books ? { isbn: data.books.isbn, title: data.books.title } : undefined
+        };
     }
 
-    private getBorrowedBookId(bookId: string, userId: string) {
-        return this.getIssueDetailsId(bookId, userId, IssueDetailType.BorrowedBook);
-    }
-
-    public async getReservations(userId: string) {
-        return this.getIssueDetailsForUser(userId, IssueDetailType.Reservation);
-    }
-
-    public async getReservation(reservationId: string) {
-        const reservation = await collections?.issueDetails?.findOne({ _id: reservationId });
-        if (!reservation) throw new Error(this.errors.NOT_FOUND);
-        return reservation;
-    }
-
-    public async getPagedReservations(limit = 50, skip = 0) {
+    public async getPagedReservations(limit = 50, skip = 0): Promise<{ data: ReservationWithDetails[], totalCount: number }> {
         if (limit > 100) {
             limit = 100;
         }
@@ -116,50 +175,78 @@ class ReservationsController {
             skip = 0;
         }
 
-        return this.getPagedIssueDetails(IssueDetailType.Reservation, limit, skip);
+        return this.getPagedReservationsData(limit, skip);
     }
 
-    public async getBookReservationByUser(bookId: string, userId: string) {
-        const reservation = await collections?.issueDetails?.findOne({ _id: this.getReservationId(bookId, userId) });
+    public async getBookReservationByUser(bookId: string, userId: string): Promise<Reservation | null> {
+        const supabase = getSupabase();
 
-        return reservation;
+        const { data, error } = await supabase
+            .from('reservations')
+            .select('*')
+            .eq('book_isbn', bookId)
+            .eq('user_id', userId)
+            .single();
+
+        if (error || !data) {
+            return null;
+        }
+
+        return data;
     }
 
-    public async createReservation(user: ReservationUser, bookId: string) {
+    public async createReservation(user: ReservationUser, bookId: string): Promise<{ id: string }> {
+        const supabase = getSupabase();
+
         const bookData = await bookController.isBookAvailable(bookId);
-        const book = {
-            _id: bookData?._id,
-            title: bookData?.title,
-        } as ReservationBook;
-        const userId = user._id.toString();
+        const userId = user.id;
 
-        const reservation = {
-            _id: this.getReservationId(book._id, userId),
-            book,
-            user,
-            recordType: 'reservation',
-            expirationDate: this.getDueDate(IssueDetailType.Reservation),
-        } as Reservation;
+        const reservation: Omit<Reservation, 'id' | 'created_at'> = {
+            user_id: userId,
+            book_isbn: bookData.isbn,
+            expiration_date: this.getDueDate(IssueDetailType.Reservation).toISOString(),
+        };
 
-        const result = await collections?.issueDetails?.insertOne(reservation);
-        await bookController.decrementBookInventory(book._id);
+        const { data, error } = await supabase
+            .from('reservations')
+            .insert(reservation)
+            .select('id')
+            .single();
 
-        return result;
+        if (error || !data) {
+            console.error('Error creating reservation:', error);
+            throw new Error(this.errors.MISSING_DETAILS);
+        }
+
+        return { id: data.id };
     }
 
-    public async cancelReservation(bookId: string, userId: string) {
-        const reservationId = this.getReservationId(bookId, userId);
-        const deleteResult = await collections?.issueDetails?.deleteOne({ _id: reservationId });
+    public async cancelReservation(bookId: string, userId: string): Promise<{ count: number }> {
+        const supabase = getSupabase();
 
-        if (deleteResult.deletedCount === 0) throw new Error(this.errors.NOT_FOUND);
+        const { data, error } = await supabase
+            .from('reservations')
+            .delete()
+            .eq('book_isbn', bookId)
+            .eq('user_id', userId)
+            .select();
 
-        await bookController.incrementBookInventory(bookId);
+        if (error) {
+            console.error('Error cancelling reservation:', error);
+            throw new Error(this.errors.NOT_FOUND);
+        }
 
-        return deleteResult;
+        if (!data || data.length === 0) {
+            throw new Error(this.errors.NOT_FOUND);
+        }
+
+        return { count: data.length };
     }
 
-    public async borrowBook(bookId: string, userId: string) {
-        let bookData: Book | null;
+    public async borrowBook(bookId: string, userId: string): Promise<{ id: string }> {
+        const supabase = getSupabase();
+
+        let bookData: BookResponse | undefined;
         try {
             bookData = await bookController.getBook(bookId);
         } catch (e) {
@@ -171,11 +258,6 @@ class ReservationsController {
             console.error(`Book with id ${bookId} not found`);
             throw new Error(this.errors.INVALID_BOOK_ID);
         }
-
-        const book = {
-            _id: bookData._id,
-            title: bookData.title,
-        } as ReservationBook;
 
         let userData: User | null;
         try {
@@ -190,46 +272,92 @@ class ReservationsController {
             throw new Error(this.errors.INVALID_USER_ID);
         }
 
-        const user = {
-            _id: userData._id,
-            name: userData.name
-        } as ReservationUser;
+        const { data: existingBorrow } = await supabase
+            .from('borrowed_books')
+            .select('id')
+            .eq('book_isbn', bookId)
+            .eq('user_id', userId)
+            .eq('returned', false)
+            .single();
 
-        const borrow = {
-            _id: this.getBorrowedBookId(book._id, userId),
-            book,
-            user,
-            recordType: 'borrowedBook',
-            borrowDate: new Date(Date.now()),
-            dueDate: this.getDueDate(IssueDetailType.BorrowedBook),
-            returned: false
-        } as BorrowedBook;
+        let borrowId: string;
 
-        let upsertResult: UpdateResult<IssueDetail>;
-        try {
-            upsertResult = await collections?.issueDetails?.updateOne({ _id: borrow._id }, { $set: borrow }, { upsert: true });
-        } catch (e) {
-            throw new Error(e.message);
+        if (existingBorrow) {
+            const { data, error } = await supabase
+                .from('borrowed_books')
+                .update({
+                    due_date: this.getDueDate(IssueDetailType.BorrowedBook).toISOString()
+                })
+                .eq('id', existingBorrow.id)
+                .select('id')
+                .single();
+
+            if (error || !data) {
+                throw new Error(this.errors.MISSING_DETAILS);
+            }
+            borrowId = data.id;
+        } else {
+            const borrow: Omit<BorrowedBook, 'id' | 'created_at'> = {
+                user_id: userId,
+                book_isbn: bookId,
+                borrow_date: new Date().toISOString(),
+                due_date: this.getDueDate(IssueDetailType.BorrowedBook).toISOString(),
+                returned: false
+            };
+
+            const { data, error } = await supabase
+                .from('borrowed_books')
+                .insert(borrow)
+                .select('id')
+                .single();
+
+            if (error || !data) {
+                console.error('Error creating borrow:', error);
+                throw new Error(this.errors.MISSING_DETAILS);
+            }
+            borrowId = data.id;
         }
 
-        // Delete matching reservation if one then re-compute computed fields
-        const reservationId = this.getReservationId(bookId, userId);
-        const deleteResult = await collections?.issueDetails?.deleteOne({ _id: reservationId });
+        await supabase
+            .from('reservations')
+            .delete()
+            .eq('book_isbn', bookId)
+            .eq('user_id', userId);
 
-        const borrowReplacesReservation = deleteResult.deletedCount === 1;
-        const borrowIsRenewal = upsertResult.modifiedCount === 1;
-        if (!borrowReplacesReservation && !borrowIsRenewal) {
-            await bookController.decrementBookInventory(book._id);
+        return { id: borrowId };
+    }
+
+    public async getBorrows(userId: string): Promise<BorrowedBookWithDetails[]> {
+        const supabase = getSupabase();
+
+        const { data, error } = await supabase
+            .from('borrowed_books')
+            .select(`
+                *,
+                books (isbn, title)
+            `)
+            .eq('user_id', userId)
+            .eq('returned', false);
+
+        if (error) {
+            console.error('Error fetching user borrows:', error);
+            return [];
         }
 
-        return upsertResult;
+        return (data || []).map(b => ({
+            id: b.id,
+            user_id: b.user_id,
+            book_isbn: b.book_isbn,
+            borrow_date: b.borrow_date,
+            due_date: b.due_date,
+            returned: b.returned,
+            returned_date: b.returned_date,
+            created_at: b.created_at,
+            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined
+        }));
     }
 
-    public async getBorrows(userId: string) {
-        return this.getIssueDetailsForUser(userId, IssueDetailType.BorrowedBook);
-    }
-
-    public async getPagedBorrows(limit = 50, skip = 0) {
+    public async getPagedBorrows(limit = 50, skip = 0): Promise<{ data: BorrowedBookWithDetails[], totalCount: number }> {
         if (limit > 100) {
             limit = 100;
         }
@@ -238,14 +366,21 @@ class ReservationsController {
             skip = 0;
         }
 
-        return this.getPagedIssueDetails(IssueDetailType.BorrowedBook, limit, skip);
+        return this.getPagedBorrowsData(limit, skip);
     }
 
-    public async returnBook(userId: string, bookId: string) {
-        const borrowId = this.getBorrowedBookId(bookId, userId);
-        const borrow = await collections?.issueDetails?.findOne({ _id: borrowId }) as BorrowedBook;
+    public async returnBook(userId: string, bookId: string): Promise<{ count: number }> {
+        const supabase = getSupabase();
 
-        if (!borrow) {
+        const { data: borrow, error: fetchError } = await supabase
+            .from('borrowed_books')
+            .select('*')
+            .eq('book_isbn', bookId)
+            .eq('user_id', userId)
+            .eq('returned', false)
+            .single();
+
+        if (fetchError || !borrow) {
             console.error(this.errors.NOT_FOUND);
             throw new Error(this.errors.NOT_FOUND);
         }
@@ -255,24 +390,51 @@ class ReservationsController {
             throw new Error(this.errors.ALREADY_RETURNED);
         }
 
-        const result = await collections?.issueDetails?.updateOne(
-            { _id: borrowId },
-            {
-                $set: { returned: true, returnedDate: new Date() }
-            }
-        );
+        const { data, error } = await supabase
+            .from('borrowed_books')
+            .update({
+                returned: true,
+                returned_date: new Date().toISOString()
+            })
+            .eq('id', borrow.id)
+            .select();
 
-        await bookController.incrementBookInventory(bookId);
+        if (error) {
+            console.error('Error returning book:', error);
+            throw new Error(this.errors.NOT_FOUND);
+        }
 
-        return result;
+        return { count: data?.length || 0 };
     }
 
-    public async getBorrowedHistory(userId: string) {
-        const borrowedBooks = await collections?.issueDetails?.find({
-            _id: new RegExp(`^${userId}B`),
-            returned: true
-        }).toArray();
-        return borrowedBooks;
+    public async getBorrowedHistory(userId: string): Promise<BorrowedBookWithDetails[]> {
+        const supabase = getSupabase();
+
+        const { data, error } = await supabase
+            .from('borrowed_books')
+            .select(`
+                *,
+                books (isbn, title)
+            `)
+            .eq('user_id', userId)
+            .eq('returned', true);
+
+        if (error) {
+            console.error('Error fetching borrowed history:', error);
+            return [];
+        }
+
+        return (data || []).map(b => ({
+            id: b.id,
+            user_id: b.user_id,
+            book_isbn: b.book_isbn,
+            borrow_date: b.borrow_date,
+            due_date: b.due_date,
+            returned: b.returned,
+            returned_date: b.returned_date,
+            created_at: b.created_at,
+            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined
+        }));
     }
 }
 

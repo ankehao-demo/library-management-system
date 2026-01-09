@@ -1,31 +1,66 @@
-import { ObjectId } from 'mongodb';
-import { collections } from '../database.js';
+import { getSupabase } from '../database.js';
+import { User } from '../models/user.js';
 
 class UserController {
-    public async createNewUser() {
-        // Generate a random username from a list of 20 adjectives and 20 animals
+    public async createNewUser(): Promise<User> {
+        const supabase = getSupabase();
+
         const adjectives = ['Abrasive', 'Brash', 'Callous', 'Daft', 'Eccentric', 'Fiesty', 'Golden', 'Happy', 'Ignominious', 'Joltin', 'Chill', 'Luminous', 'Mushy', 'Cool', 'OldSchool', 'Pompous', 'Quiet', 'Rowdy', 'Sneaky', 'Tawdry'];
         const animals = ['Alligator', 'Barracuda', 'Cheetah', 'Dingo', 'Elephant', 'Falcon', 'Gorilla', 'Hyena', 'Iguana', 'Jaguar', 'Koala', 'Lemur', 'Mongoose', 'Narwhal', 'Orangutan', 'Platypus', 'Quetzal', 'Rhino', 'Scorpion', 'Tarantula'];
         const randomUsername = `${adjectives[Math.floor(Math.random() * 20)]} ${animals[Math.floor(Math.random() * 20)]}`;
 
-        let user = await collections?.users?.findOne({ name: randomUsername });
-        if (!user) {
-            const tempUser = { name: randomUsername, isAdmin: true };
-            const result = await collections?.users?.insertOne(tempUser);
-            user = Object.assign({}, tempUser, {_id: result?.insertedId});
+        const { data: existingUser } = await supabase
+            .from('users')
+            .select('*')
+            .eq('name', randomUsername)
+            .single();
+
+        if (existingUser) {
+            return existingUser;
+        }
+
+        const { data: newUser, error } = await supabase
+            .from('users')
+            .insert({ name: randomUsername, is_admin: true })
+            .select()
+            .single();
+
+        if (error || !newUser) {
+            console.error('Error creating user:', error);
+            throw new Error('Unable to create user');
+        }
+
+        return newUser;
+    }
+
+    public async getUser(username: string): Promise<User | null> {
+        const supabase = getSupabase();
+
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('name', username)
+            .single();
+
+        if (error || !user) {
+            return null;
         }
 
         return user;
     }
 
-    public async getUser(username: string) {
-        const user = await collections?.users?.findOne({ name: username });
-        return user;
-    }
+    public async getUserById(userId: string): Promise<User | null> {
+        const supabase = getSupabase();
 
-    public async getUserById(userId: string) {
-        const objectId = new ObjectId(userId);
-        const user = await collections?.users?.findOne({ _id: objectId });
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+
+        if (error || !user) {
+            return null;
+        }
 
         return user;
     }

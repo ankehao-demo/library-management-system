@@ -1,6 +1,6 @@
 # Library Management System
 
-This is a library management system built with the MEAN (MongoDB, Express, Angular, Node.js) stack. 
+This is a library management system built with the PEAN (PostgreSQL/Supabase, Express, Angular, Node.js) stack.
 
 ## Running the project
 
@@ -17,16 +17,17 @@ This is a library management system built with the MEAN (MongoDB, Express, Angul
     npm install
     ```
 
-1.  Set your [Atlas URI connection string](https://docs.atlas.mongodb.com/getting-started/), database name and server port in `server/.env`. Make sure you replace the username and password placeholders with your own credentials.
+1. Set your Supabase configuration and server port in `server/.env`. You can find your Supabase URL and service role key in your Supabase project settings.
 
     **library/server/.env**
     ```
     PORT="5000"
-    DATABASE_URI="mongodb+srv://<username>:<password>@m0.kwqkoewm.mongodb.net"
-    DATABASE_NAME="library"
+    SUPABASE_URL="https://your-project.supabase.co"
+    SUPABASE_SERVICE_KEY="your-service-role-key"
     SECRET="secret"
     ```
 
+    Note: Use the service role key (not the anon key) for server-side operations as it bypasses Row Level Security.
 
 1. Start the **server** application.
 
@@ -57,4 +58,19 @@ npm test
 
 The project utilizes [Husky](https://typicode.github.io/husky/) to execute actions before every commit. The pre-commit hook, located in [.husky/pre-commit](./.husky/pre-commit), lints the code and runs the API tests.
 
-Use at your own risk; not a supported MongoDB product
+## Database Schema
+
+The application uses Supabase (PostgreSQL) with the following tables:
+- `users` - Library users with admin flag
+- `authors` - Book authors with aliases
+- `author_aliases` - Author name aliases
+- `books` - Book catalog with ISBN as primary key
+- `book_authors` - Junction table for book-author relationships
+- `book_genres` - Book genre associations
+- `book_attributes` - Additional book attributes
+- `reviews` - User reviews for books
+- `reservations` - Book reservations (12-hour expiration)
+- `borrowed_books` - Active and historical book loans (21-day period)
+- `v_book_availability` - View for computing real-time book availability
+
+Use at your own risk; not a supported product

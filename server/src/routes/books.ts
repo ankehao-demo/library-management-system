@@ -1,10 +1,8 @@
 import { Router } from 'express';
-import { collections } from '../database.js';
 import { Request as AuthRequest } from 'express-jwt';
 import { protectedRoute, adminRoute } from '../utils/middlewares.js';
 import BookController from '../controllers/books.js';
 
-// The router will be added as a middleware and will take control of requests starting with /books.
 const books = Router();
 export default books;
 
@@ -72,7 +70,7 @@ books.put('/:bookId', protectedRoute, adminRoute, async (req: AuthRequest, res) 
     }
 
     try {
-        const result = await collections?.books?.updateOne({ _id: bookId }, { $set: book });
+        const result = await bookController.updateBook(bookId, book);
         return res.status(200).send({result, message: bookController.success.UPDATED});
     } catch(error) {
         return res.status(500).send({message: error});
@@ -87,7 +85,7 @@ books.delete('/:bookId', protectedRoute, adminRoute, async (req: AuthRequest, re
     }
 
     try {
-        const result = await collections?.books?.deleteOne({ _id: bookId });
+        const result = await bookController.deleteBook(bookId);
         return res.status(202).send({result, message: bookController.success.DELETED});
     } catch (error) {
         if (error === bookController.errors.NOT_FOUND) return res.status(404).send({ message: error });

@@ -1,61 +1,32 @@
 import '../load-env-vars.js';
-import { connectToDatabase, collections } from '../database.js';
-import { BorrowedBook } from '../models/issue-detail.js';
-import { ObjectId } from 'mongodb';
+import { connectToDatabase, getSupabase } from '../database.js';
 
-const { DATABASE_URI } = process.env;
-
-console.log('Connecting to MongoDB Atlas...');
-const client = await connectToDatabase(DATABASE_URI);
+console.log('Connecting to Supabase...');
+await connectToDatabase();
+const supabase = getSupabase();
 console.log('Connected!\n');
 
-console.log('BEFORE creating the index\n');
-await explainBorrowedBooksQuery();
+console.log('Checking borrowed_books table indexes...');
 
-/**
- * Create the index to support the following query:
- * issueDetails.find({
- *    'user._id': userID,
- *   borrowDate: { $gte: date },
- * }, {
- *  sort: { returnedDate: -1 }
- * })
- */
-await collections?.issueDetails?.createIndex({
-    // Equality
-    'user._id': 1,
-    // Sort
-    returnedDate: 1,
-    // Range
-    borrowDate: 1,
-});
+const { data: borrows, error } = await supabase
+    .from('borrowed_books')
+    .select('id, user_id, book_isbn, borrow_date, returned_date')
+    .eq('user_id', '65133d20-e861-a187-0946-72a700000001')
+    .gte('borrow_date', '2024-04-01')
+    .order('returned_date', { ascending: false })
+    .limit(10);
 
-console.log('\n-----------------------------\n');
-console.log('AFTER creating the index\n');
-await explainBorrowedBooksQuery();
-
-await collections?.issueDetails?.dropIndexes();
-await client.close();
-process.exit();
-
-async function explainBorrowedBooksQuery() {
-    /**
-     * Find all books that have been borrowed by the user with the specified ID since April this year.
-     * Sort the results by the date they were returned in descending order.
-     */
-    const explainPlan = await collections?.issueDetails?.find<BorrowedBook>({
-        'user._id': new ObjectId('65133d20e861a187094672a7'),
-        borrowDate: { $gte: new Date('2024-04-01') }
-    }, {
-        sort: { returnedDate: -1 }
-    }).explain();
-
-    const inputStage = explainPlan.queryPlanner.winningPlan.inputStage;
-    console.log(`Winning plan stage: ${inputStage.stage}`);
-    
-    const index = inputStage.indexName;
-    console.log(index ? `Index used: ${index}` : 'No index used');
-
-    console.log(`Total documents examined: ${explainPlan.executionStats.totalDocsExamined}`);
-    console.log(`Number of documents returned: ${explainPlan.executionStats.nReturned}`);
+if (error) {
+    console.error('Error querying borrowed_books:', error);
+    process.exit(1);
 }
+
+console.log(`Found ${borrows?.length || 0} borrowed books matching the query.`);
+
+console.log('\nNote: In Supabase/Postgres, indexes are managed through the database schema.');
+console.log('Recommended indexes for borrowed_books table:');
+console.log('  - CREATE INDEX idx_borrowed_books_user_id ON borrowed_books(user_id);');
+console.log('  - CREATE INDEX idx_borrowed_books_borrow_date ON borrowed_books(borrow_date);');
+console.log('  - CREATE INDEX idx_borrowed_books_returned_date ON borrowed_books(returned_date);');
+
+process.exit(0);

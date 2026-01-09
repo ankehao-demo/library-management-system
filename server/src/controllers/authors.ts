@@ -1,6 +1,5 @@
-import { ObjectId } from 'mongodb';
-import { AuthorResponse } from '../models/author';
-import { collections } from '../database.js';
+import { AuthorResponse } from '../models/author.js';
+import { getSupabase } from '../database.js';
 
 export class AuthorController {
     errors = {
@@ -8,35 +7,49 @@ export class AuthorController {
         AUTHOR_ID_MISSING: 'Author id is missing'
     };
 
-    public async getAuthor(authorId: string): Promise<AuthorResponse> {
-        const author = await collections?.authors?.aggregate<AuthorResponse>([
-            {
-                $match: {
-                    _id: new ObjectId(authorId)
-                }
-            },
-            {
-                // Join the books collection to get the books written by this author
-                $lookup: {
-                    from: 'books', // Collection to join
-                    localField: 'books', // Field from this collection ("books" array of ids)
-                    foreignField: '_id', // Field from the joined "books" collection
-                    pipeline: [
-                        {
-                            // Project only the title and the isbn
-                            $project: {
-                                isbn: '$_id', // Rename _id to isbn
-                                _id: 0, // Exclude _id
-                                title: 1, // Include title
-                                cover: 1, // Include cover
-                            }
-                        }
-                    ],
-                    as: 'books' // Store the joined result in the books field
-                }
-            }
-        ]).toArray();
+    public async getAuthor(authorId: string): Promise<AuthorResponse | null> {
+        const supabase = getSupabase();
 
-        return author && author[0];
+        const { data: author, error } = await supabase
+            .from('authors')
+            .select('*')
+            .eq('id', authorId)
+            .single();
+
+        if (error || !author) {
+            return null;
+        }
+
+        const { data: aliases } = await supabase
+            .from('author_aliases')
+            .select('alias')
+            .eq('author_id', authorId);
+
+        const { data: bookAuthors } = await supabase
+            .from('book_authors')
+            .select(`
+                book_isbn,
+                books (
+                    isbn,
+                    title,
+                    cover_url
+                )
+            `)
+            .eq('author_id', authorId);
+
+        const authorResponse: AuthorResponse = {
+            ...author,
+            aliases: aliases?.map(a => a.alias) || [],
+            books: bookAuthors?.map(ba => {
+                const bookData = ba.books as unknown as { isbn: string; title: string; cover_url?: string } | null;
+                return {
+                    isbn: bookData?.isbn || ba.book_isbn,
+                    title: bookData?.title || '',
+                    cover_url: bookData?.cover_url
+                };
+            }) || []
+        };
+
+        return authorResponse;
     }
 }

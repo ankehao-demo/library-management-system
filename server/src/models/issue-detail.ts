@@ -1,85 +1,81 @@
-import { ObjectId } from 'mongodb';
+/**
+ * In Postgres, reservations and borrowed_books are stored in separate tables
+ * instead of the MongoDB polymorphic single-collection pattern.
+ */
 
 /**
- * IssueDetail follows the single-collection pattern.
- * The detail is either a borrowed book or a reservation.
- * The type of detail is indicated by the recordType field.
- * See https://www.mongodb.com/blog/post/building-with-patterns-the-single-collection-pattern.
+ * Reservation record from the reservations table.
  */
-export type IssueDetail = BorrowedBook | Reservation;
-
-interface ReservationUser {
-    _id: ObjectId;
-    name: string;
+export interface Reservation {
+    id?: string;
+    user_id: string;
+    book_isbn: string;
+    expiration_date: string;
+    created_at?: string;
 }
 
-interface ReservationBook {
-    _id: string;
-    title: string;
+/**
+ * Borrowed book record from the borrowed_books table.
+ */
+export interface BorrowedBook {
+    id?: string;
+    user_id: string;
+    book_isbn: string;
+    borrow_date: string;
+    due_date: string;
+    returned: boolean;
+    returned_date?: string;
+    created_at?: string;
 }
 
-enum IssueDetailType {
+/**
+ * Reservation with joined user and book data for API responses.
+ */
+export interface ReservationWithDetails extends Reservation {
+    user?: {
+        id: string;
+        name: string;
+    };
+    book?: {
+        isbn: string;
+        title: string;
+    };
+}
+
+/**
+ * Borrowed book with joined user and book data for API responses.
+ */
+export interface BorrowedBookWithDetails extends BorrowedBook {
+    user?: {
+        id: string;
+        name: string;
+    };
+    book?: {
+        isbn: string;
+        title: string;
+    };
+}
+
+/**
+ * Issue detail type enum for distinguishing between reservations and borrows.
+ */
+export enum IssueDetailType {
     Reservation = 'R',
     BorrowedBook = 'B'
 }
 
-interface BorrowedBook extends IssueDetailBase {
-    /**
-     * Date when the book was borrowed.
-     */
-    borrowDate: Date;
-    /**
-     * Date when the book is due to be returned.
-     */
-    dueDate: Date;
-    /**
-     * Date when the book was returned.
-     * (optional) set when the book is returned.
-     */
-    returnedDate?: Date;
-    /**
-     * Boolean indicating if the book was returned.
-     */
-    returned: boolean;
+/**
+ * User reference for reservation/borrow operations.
+ */
+export interface ReservationUser {
+    id: string;
+    name: string;
 }
 
-interface Reservation extends IssueDetailBase {
-    /**
-     * Date when the reservation expires.
-     * TTL index applied to this field to automatically remove the reservation.
-     */
-    expirationDate: Date;
+/**
+ * Book reference for reservation/borrow operations.
+ */
+export interface ReservationBook {
+    isbn: string;
+    title: string;
 }
-
-interface IssueDetailBase {
-    /**
-     * Identifier with the format 'userId_objectId' to optimize querying by user.
-     * db.issueDetails.find({ _id: /^userId/ })
-    */
-    _id: string;
-
-    /**
-     * Type of record: 'borrowedBook' or 'reservation'.
-     */
-    recordType: string;
-
-    /**
-     * Reference to the book collection following the extended reference pattern.
-     * See https://www.mongodb.com/blog/post/building-with-patterns-the-extended-reference-pattern.
-     */
-    book: ReservationBook;
-
-    /**
-     * Reference to the user collection following the extended reference pattern.
-     * See https://www.mongodb.com/blog/post/building-with-patterns-the-extended-reference-pattern.
-     */
-    user: ReservationUser;
-}
-
-export {
-    BorrowedBook,
-    IssueDetailType,
-    Reservation,
-    ReservationBook,
-    ReservationUser
-};

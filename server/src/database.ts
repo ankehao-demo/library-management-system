@@ -1,24 +1,19 @@
-import * as mongodb from 'mongodb';
-import { Book } from './models/book';
-import { IssueDetail } from './models/issue-detail';
-import { Author } from './models/author';
-import { Review } from './models/review';
-import { User } from './models/user';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-export const collections: {
-    books?: mongodb.Collection<Book>;
-    authors?: mongodb.Collection<Author>;
-    reviews?: mongodb.Collection<Review>;
-    users?: mongodb.Collection<User>;
-    issueDetails?: mongodb.Collection<IssueDetail>;
-} = {};
+let supabaseClient: SupabaseClient | null = null;
 
-export const databases: {
-    library?: mongodb.Db;
-} = {};
+export function getSupabase(): SupabaseClient {
+    if (!supabaseClient) {
+        throw new Error('Supabase client not initialized. Call connectToDatabase first.');
+    }
+    return supabaseClient;
+}
 
-export async function connectToDatabase(uri?: string) {
-    if (!uri || uri === 'mongodb+srv://user:password@cluster' || typeof uri !== 'string') {
+export async function connectToDatabase(supabaseUrl?: string, supabaseKey?: string) {
+    const url = supabaseUrl || process.env.SUPABASE_URL;
+    const key = supabaseKey || process.env.SUPABASE_SERVICE_KEY;
+
+    if (!url || !key) {
         throw new Error(`
         ####### ######  ######  ####### ######  
         #       #     # #     # #     # #     # 
@@ -28,27 +23,13 @@ export async function connectToDatabase(uri?: string) {
         #       #    #  #    #  #     # #    #  
         ####### #     # #     # ####### #     # 
 
-        Missing database connection string! Open the .env file and add your MongoDB connection string to the DATABASE_URI variable.
+        Missing Supabase configuration! Open the .env file and add:
+        - SUPABASE_URL: Your Supabase project URL
+        - SUPABASE_SERVICE_KEY: Your Supabase service role key (for server-side operations)
     `);
     }
 
-    const client = new mongodb.MongoClient(uri, { appName: 'devrel.workshop.devday' });
-    await client.connect();
+    supabaseClient = createClient(url, key);
 
-    const db = client.db(process.env.DATABASE_NAME);
-    databases.library = db;
-
-    const booksCollection = db.collection<Book>('books');
-    const authorsCollection = db.collection<Author>('authors');
-    const reviewsCollection = db.collection<Review>('reviews');
-    const usersCollection = db.collection<User>('users');
-    const issueDetailCollection = db.collection<IssueDetail>('issueDetails');
-
-    collections.books = booksCollection;
-    collections.authors = authorsCollection;
-    collections.reviews = reviewsCollection;
-    collections.users = usersCollection;
-    collections.issueDetails = issueDetailCollection;
-
-    return client;
+    return supabaseClient;
 }

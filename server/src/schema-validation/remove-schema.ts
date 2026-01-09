@@ -1,25 +1,19 @@
 import '../load-env-vars.js';
-import { connectToDatabase, databases } from '../database.js';
+import { connectToDatabase, getSupabase } from '../database.js';
 
-const { DATABASE_URI } = process.env;
-
-console.log('Connecting to MongoDB Atlas...');
-await connectToDatabase(DATABASE_URI);
-const db = databases.library;
+console.log('Connecting to Supabase...');
+await connectToDatabase();
+const supabase = getSupabase();
 console.log('Connected!\n');
 
-console.log('Disabling schema validation...');
-await db.command({
-    collMod: 'users',
-    validator: {},
-    validationLevel: 'off'
-});
+console.log('Schema validation is handled by Postgres constraints in Supabase.');
+console.log('No action needed - constraints are defined in the database schema.');
 
-await db.command({
-    collMod: 'authors',
-    validator: {},
-    validationLevel: 'off'
-});
+const { error } = await supabase.from('users').select('id').limit(1);
+if (error) {
+    console.error('Error verifying connection:', error);
+    process.exit(1);
+}
 
-console.log('Disabled');
+console.log('Connection verified successfully.');
 process.exit(0);
