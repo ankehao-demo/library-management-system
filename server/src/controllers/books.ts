@@ -44,10 +44,11 @@ class BookController {
 
         return (books || []).map(book => ({
             ...book,
+            _id: book.isbn,
             authors: book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
-                id: ba.authors?.id,
+                _id: ba.authors?.id,
                 name: ba.authors?.name
-            })).filter((a: { id: string; name: string }) => a.id) || []
+            })).filter((a: { _id: string; name: string }) => a._id) || []
         }));
     }
 
@@ -96,14 +97,15 @@ class BookController {
         const available = book.total_inventory - totalHeld;
 
         const authors = book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
-            id: ba.authors?.id,
+            _id: ba.authors?.id,
             name: ba.authors?.name
-        })).filter((a: { id: string; name: string }) => a.id) || [];
+        })).filter((a: { _id: string; name: string }) => a._id) || [];
 
         const genres = book.book_genres?.map((bg: { genre: string }) => bg.genre) || [];
 
         return {
             ...book,
+            _id: book.isbn,
             authors,
             genres,
             available,
@@ -133,10 +135,11 @@ class BookController {
 
         return (books || []).map(book => ({
             ...book,
+            _id: book.isbn,
             authors: book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
-                id: ba.authors?.id,
+                _id: ba.authors?.id,
                 name: ba.authors?.name
-            })).filter((a: { id: string; name: string }) => a.id) || []
+            })).filter((a: { _id: string; name: string }) => a._id) || []
         }));
     }
 
