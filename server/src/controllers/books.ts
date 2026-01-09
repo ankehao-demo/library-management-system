@@ -26,7 +26,15 @@ class BookController {
 
         const { data: books, error } = await supabase
             .from('books')
-            .select('*')
+            .select(`
+                *,
+                book_authors (
+                    authors (
+                        id,
+                        name
+                    )
+                )
+            `)
             .range(skip, skip + limit - 1);
 
         if (error) {
@@ -34,7 +42,13 @@ class BookController {
             return [];
         }
 
-        return books || [];
+        return (books || []).map(book => ({
+            ...book,
+            authors: book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
+                id: ba.authors?.id,
+                name: ba.authors?.name
+            })).filter((a: { id: string; name: string }) => a.id) || []
+        }));
     }
 
     public async getBook(bookId: string): Promise<Book | undefined> {
