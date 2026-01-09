@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ path: './server/.env' });
 
-const BASE_URL = 'http://localhost:5001';
+const BASE_URL = 'http://localhost:5000';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
 
