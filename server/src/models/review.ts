@@ -1,14 +1,15 @@
-import { ObjectId } from 'mongodb';
-
 export interface Review {
-    _id: ObjectId;
+    id?: string;
+    book_isbn?: string;
+    reviewer_name: string;
     text: string;
-    name: string;
-    rating?: number; // Optional as it could be added in a NLP Lab
-    timestamp: number;
+    rating?: number;
+    created_at?: string;
+}
 
-    /**
-     * Reference to the book collection.
-     */
-    bookId: string;
+export interface ReviewInsert {
+    book_isbn: string;
+    reviewer_name: string;
+    text: string;
+    rating?: number;
 }

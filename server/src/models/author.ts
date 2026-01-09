@@ -1,27 +1,24 @@
-import { ObjectId } from 'mongodb';
-
-/**
- * Author model as stored in the database.
- */
 export interface Author {
-    _id: ObjectId
+    id: string;
     name: string;
-    sanitizedName: string;
-    aliases: Array<string>;
+    sanitized_name?: string;
     bio?: string;
-
-    /**
-     * Array of ISBNs of books written by this author. Reference to the books collection.
-     */
-    books: Array<string>;
+    created_at?: string;
+    updated_at?: string;
+    aliases?: string[];
+    books?: AuthorBook[];
 }
 
-/**
- * Author model as returned by the API.
- */
-export type AuthorResponse = Omit<Author, 'books'> & {
-    books: Array<{
-        isbn: string;
-        title: string;
-    }>;
+export interface AuthorBook {
+    isbn: string;
+    title: string;
+    cover_url?: string;
 }
+
+export interface AuthorInsert {
+    name: string;
+    sanitized_name?: string;
+    bio?: string;
+}
+
+export type AuthorResponse = Author;

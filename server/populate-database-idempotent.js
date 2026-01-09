@@ -3,17 +3,20 @@
 /**
  * IDEMPOTENT Script - Safe to run multiple times
  * Checks for existing data and only creates what's missing
+ * Updated for Supabase/Postgres
  */
 
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
-import { MongoClient, ObjectId } from 'mongodb';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config({ path: './server/.env' });
 
-const BASE_URL = 'http://localhost:5001';
-const URI = process.env.DATABASE_URI;
-const DATABASE_NAME = process.env.DATABASE_NAME || 'library';
+const BASE_URL = 'http://localhost:5000';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Helper function to make API calls
 async function apiCall(method, endpoint, data = null, token = null) {
@@ -39,14 +42,14 @@ async function apiCall(method, endpoint, data = null, token = null) {
 
 // Get admin JWT token
 async function getAdminToken() {
-    console.log('🔑 Getting admin JWT token...');
+    console.log('Getting admin JWT token...');
     const result = await apiCall('GET', '/users/login/DatabaseAdmin');
     return result?.jwt;
 }
 
 // Create additional users
 async function createUsersIfNeeded() {
-    console.log('👥 Creating additional users...');
+    console.log('Creating additional users...');
     
     const userNames = [
         'LibraryManager',
@@ -65,7 +68,7 @@ async function createUsersIfNeeded() {
         const result = await apiCall('GET', `/users/login/${userName}`);
         if (result?.jwt) {
             createdUsers.push({ name: userName, jwt: result.jwt });
-            console.log(`✅ Created/verified user: ${userName}`);
+            console.log(`Created/verified user: ${userName}`);
         }
     }
     
@@ -74,66 +77,61 @@ async function createUsersIfNeeded() {
 
 // Create authors only if they don't exist
 async function createAuthorsIfNeeded() {
-    console.log('👤 Checking for existing authors...');
-    
-    const client = new MongoClient(URI);
-    await client.connect();
-    const db = client.db(DATABASE_NAME);
-    const authorsCollection = db.collection('authors');
+    console.log('Checking for existing authors...');
     
     const authorData = [
         {
             name: "F. Scott Fitzgerald",
-            sanitizedName: "f-scott-fitzgerald",
+            sanitized_name: "f-scott-fitzgerald",
             aliases: ["Francis Scott Key Fitzgerald"],
             bio: "American novelist, essayist, and short story writer known for depicting the flamboyance and excess of the Jazz Age.",
             books: ["9780743273565"]
         },
         {
             name: "Harper Lee",
-            sanitizedName: "harper-lee", 
+            sanitized_name: "harper-lee", 
             aliases: ["Nelle Harper Lee"],
             bio: "American novelist best known for To Kill a Mockingbird, which won the 1961 Pulitzer Prize.",
             books: ["9780061120084"]
         },
         {
             name: "George Orwell",
-            sanitizedName: "george-orwell",
+            sanitized_name: "george-orwell",
             aliases: ["Eric Arthur Blair"],
             bio: "English novelist, essayist, journalist and critic known for works like 1984 and Animal Farm.",
             books: ["9780451524935", "9780452284234"]
         },
         {
             name: "Jane Austen",
-            sanitizedName: "jane-austen",
+            sanitized_name: "jane-austen",
             aliases: [],
             bio: "English novelist known primarily for her six major novels, which interpret, critique and comment upon the British landed gentry at the end of the 18th century.",
             books: ["9780141439518", "9780141439662"]
         },
         {
             name: "J.D. Salinger",
-            sanitizedName: "jd-salinger",
+            sanitized_name: "jd-salinger",
             aliases: ["Jerome David Salinger"],
             bio: "American writer best known for his 1951 novel The Catcher in the Rye.",
             books: ["9780316769174"]
         },
         {
             name: "William Golding",
-            sanitizedName: "william-golding",
+            sanitized_name: "william-golding",
             aliases: ["Sir William Gerald Golding"],
             bio: "British novelist, playwright, and poet. Best known for his debut novel Lord of the Flies.",
             books: ["9780571056866"]
         },
         {
             name: "J.K. Rowling",
-            sanitizedName: "jk-rowling",
+            sanitized_name: "jk-rowling",
             aliases: ["Joanne Rowling"],
             bio: "British author, best known for the Harry Potter series of fantasy novels.",
             books: ["9780439708180", "9780439064873"]
         },
         {
             name: "Agatha Christie",
-            sanitizedName: "agatha-christie",
+            sanitized_name: "agatha-christie",
             aliases: ["Dame Agatha Mary Clarissa Christie"],
             bio: "English writer known for her sixty-six detective novels and fourteen short story collections.",
             books: ["9780062073488", "9780062073471"]
@@ -144,31 +142,59 @@ async function createAuthorsIfNeeded() {
     
     for (const authorInfo of authorData) {
         // Check if author already exists
-        let author = await authorsCollection.findOne({ name: authorInfo.name });
+        const { data: existingAuthor } = await supabase
+            .from('authors')
+            .select('id, name')
+            .eq('name', authorInfo.name)
+            .single();
         
-        if (!author) {
+        if (!existingAuthor) {
             // Create new author
-            author = { _id: new ObjectId(), ...authorInfo };
-            await authorsCollection.insertOne(author);
-            console.log(`✅ Created new author: ${author.name}`);
+            const { data: newAuthor, error } = await supabase
+                .from('authors')
+                .insert({
+                    name: authorInfo.name,
+                    sanitized_name: authorInfo.sanitized_name,
+                    bio: authorInfo.bio
+                })
+                .select()
+                .single();
+            
+            if (error) {
+                console.error(`Error creating author ${authorInfo.name}:`, error.message);
+                continue;
+            }
+            
+            // Create aliases
+            if (authorInfo.aliases && authorInfo.aliases.length > 0) {
+                for (const alias of authorInfo.aliases) {
+                    await supabase
+                        .from('author_aliases')
+                        .insert({
+                            author_id: newAuthor.id,
+                            alias: alias
+                        });
+                }
+            }
+            
+            console.log(`Created new author: ${authorInfo.name}`);
+            authorIdMap[authorInfo.name] = newAuthor.id;
         } else {
-            console.log(`⚠️  Author already exists: ${author.name}`);
+            console.log(`Author already exists: ${existingAuthor.name}`);
+            authorIdMap[authorInfo.name] = existingAuthor.id;
         }
-        
-        authorIdMap[author.name] = author._id;
     }
     
-    await client.close();
     return authorIdMap;
 }
 
 // Create books only if they don't exist
 async function createBooksIfNeeded(token, authorIdMap) {
-    console.log('📚 Checking for existing books...');
+    console.log('Checking for existing books...');
     
     const booksData = [
         {
-            _id: "9780743273565",
+            isbn: "9780743273565",
             title: "The Great Gatsby",
             year: 1925,
             authorName: "F. Scott Fitzgerald",
@@ -177,7 +203,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 180
         },
         {
-            _id: "9780061120084",
+            isbn: "9780061120084",
             title: "To Kill a Mockingbird",
             year: 1960,
             authorName: "Harper Lee",
@@ -186,7 +212,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 376
         },
         {
-            _id: "9780451524935",
+            isbn: "9780451524935",
             title: "1984",
             year: 1949,
             authorName: "George Orwell",
@@ -195,7 +221,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 328
         },
         {
-            _id: "9780452284234",
+            isbn: "9780452284234",
             title: "Animal Farm",
             year: 1945,
             authorName: "George Orwell",
@@ -204,7 +230,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 112
         },
         {
-            _id: "9780141439518",
+            isbn: "9780141439518",
             title: "Pride and Prejudice",
             year: 1813,
             authorName: "Jane Austen",
@@ -213,7 +239,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 432
         },
         {
-            _id: "9780141439662",
+            isbn: "9780141439662",
             title: "Emma",
             year: 1815,
             authorName: "Jane Austen",
@@ -222,7 +248,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 474
         },
         {
-            _id: "9780316769174",
+            isbn: "9780316769174",
             title: "The Catcher in the Rye",
             year: 1951,
             authorName: "J.D. Salinger",
@@ -231,7 +257,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 277
         },
         {
-            _id: "9780571056866",
+            isbn: "9780571056866",
             title: "Lord of the Flies",
             year: 1954,
             authorName: "William Golding",
@@ -240,7 +266,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 248
         },
         {
-            _id: "9780439708180",
+            isbn: "9780439708180",
             title: "Harry Potter and the Sorcerer's Stone",
             year: 1997,
             authorName: "J.K. Rowling",
@@ -249,7 +275,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 309
         },
         {
-            _id: "9780439064873",
+            isbn: "9780439064873",
             title: "Harry Potter and the Chamber of Secrets",
             year: 1998,
             authorName: "J.K. Rowling",
@@ -258,7 +284,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 341
         },
         {
-            _id: "9780062073488",
+            isbn: "9780062073488",
             title: "Murder on the Orient Express",
             year: 1934,
             authorName: "Agatha Christie",
@@ -267,7 +293,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
             pages: 256
         },
         {
-            _id: "9780062073471",
+            isbn: "9780062073471",
             title: "And Then There Were None",
             year: 1939,
             authorName: "Agatha Christie",
@@ -281,36 +307,33 @@ async function createBooksIfNeeded(token, authorIdMap) {
     
     for (const bookData of booksData) {
         // Check if book already exists
-        const existingBook = await apiCall('GET', `/books/${bookData._id}`);
+        const existingBook = await apiCall('GET', `/books/${bookData.isbn}`);
         
         if (!existingBook) {
-            // Create new book
+            // Create new book via API
             const book = {
-                _id: bookData._id,
+                isbn: bookData.isbn,
                 title: bookData.title,
                 year: bookData.year,
                 authors: [{
-                    _id: authorIdMap[bookData.authorName],
+                    id: authorIdMap[bookData.authorName],
                     name: bookData.authorName
                 }],
                 synopsis: bookData.synopsis,
                 publisher: bookData.publisher,
                 pages: bookData.pages,
                 language: "English",
-                totalInventory: 5,
-                available: 5,
-                attributes: [],
-                reviews: []
+                total_inventory: 5
             };
             
             const result = await apiCall('POST', '/books', book, token);
             if (result) {
-                createdBooks.push(book);
-                console.log(`✅ Created new book: ${book.title}`);
+                createdBooks.push({ isbn: bookData.isbn, title: bookData.title });
+                console.log(`Created new book: ${book.title}`);
             }
         } else {
-            console.log(`⚠️  Book already exists: ${bookData.title}`);
-            createdBooks.push({ _id: bookData._id, title: bookData.title });
+            console.log(`Book already exists: ${bookData.title}`);
+            createdBooks.push({ isbn: bookData.isbn, title: bookData.title });
         }
     }
     
@@ -319,7 +342,7 @@ async function createBooksIfNeeded(token, authorIdMap) {
 
 // Create reviews only if they don't exist
 async function createReviewsIfNeeded(token, books, users) {
-    console.log('⭐ Checking for existing reviews...');
+    console.log('Checking for existing reviews...');
     
     const reviewTemplates = {
         "The Great Gatsby": [
@@ -357,7 +380,7 @@ async function createReviewsIfNeeded(token, books, users) {
     };
     
     for (const book of books) {
-        const existingReviews = await apiCall('GET', `/books/${book._id}/reviews`);
+        const existingReviews = await apiCall('GET', `/books/${book.isbn}/reviews`);
         
         if (!existingReviews || existingReviews.length === 0) {
             const bookReviews = reviewTemplates[book.title] || [
@@ -370,20 +393,20 @@ async function createReviewsIfNeeded(token, books, users) {
                 const review = bookReviews[i];
                 const userToken = users[i % users.length].jwt;
                 
-                const result = await apiCall('POST', `/books/${book._id}/reviews`, review, userToken);
+                const result = await apiCall('POST', `/books/${book.isbn}/reviews`, review, userToken);
                 if (result) {
-                    console.log(`✅ Created review for ${book.title} by ${users[i % users.length].name}`);
+                    console.log(`Created review for ${book.title} by ${users[i % users.length].name}`);
                 }
             }
         } else {
-            console.log(`⚠️  Reviews already exist for ${book.title} (${existingReviews.length} reviews)`);
+            console.log(`Reviews already exist for ${book.title} (${existingReviews.length} reviews)`);
         }
     }
 }
 
 // Create some reservations for variety
 async function createReservationsIfNeeded(books, users) {
-    console.log('📋 Creating sample reservations...');
+    console.log('Creating sample reservations...');
     
     // Create a few reservations with different users
     const reservationPairs = [
@@ -397,11 +420,11 @@ async function createReservationsIfNeeded(books, users) {
             const book = books[pair.bookIndex];
             const user = users[pair.userIndex];
             
-            const result = await apiCall('POST', `/reservations/${book._id}`, {}, user.jwt);
+            const result = await apiCall('POST', `/reservations/${book.isbn}`, {}, user.jwt);
             if (result) {
-                console.log(`✅ Created reservation for "${book.title}" by ${user.name}`);
+                console.log(`Created reservation for "${book.title}" by ${user.name}`);
             } else {
-                console.log(`⚠️  Reservation may already exist for "${book.title}" by ${user.name}`);
+                console.log(`Reservation may already exist for "${book.title}" by ${user.name}`);
             }
         }
     }
@@ -409,16 +432,21 @@ async function createReservationsIfNeeded(books, users) {
 
 // Main function
 async function populateDatabaseIdempotent() {
-    console.log('🚀 Starting ENHANCED IDEMPOTENT database population...\n');
+    console.log('Starting ENHANCED IDEMPOTENT database population...\n');
+    
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+        console.error('Missing Supabase configuration. Please set SUPABASE_URL and SUPABASE_SERVICE_KEY in server/.env');
+        return;
+    }
     
     try {
         const adminToken = await getAdminToken();
         if (!adminToken) {
-            console.error('❌ Failed to get admin token');
+            console.error('Failed to get admin token');
             return;
         }
         
-        console.log('📊 Creating comprehensive library dataset...\n');
+        console.log('Creating comprehensive library dataset...\n');
         
         const users = await createUsersIfNeeded();
         const authorIdMap = await createAuthorsIfNeeded();
@@ -426,18 +454,18 @@ async function populateDatabaseIdempotent() {
         await createReviewsIfNeeded(adminToken, books, users);
         await createReservationsIfNeeded(books, users);
         
-        console.log('\n🎉 Enhanced database population completed!');
-        console.log('\n📊 Final Summary:');
-        console.log(`- 📚 Books: ${books.length} classic and popular titles`);
-        console.log(`- 👤 Authors: 8 renowned authors (Fitzgerald, Austen, Orwell, etc.)`);
-        console.log(`- 👥 Users: ${users.length} diverse library users`);
-        console.log('- ⭐ Reviews: Multiple reviews per book from different users');
-        console.log('- 📋 Reservations: Sample reservations created');
-        console.log('\n✅ Safe to run multiple times - only creates missing data');
-        console.log('✅ Rich dataset perfect for testing and demonstration');
+        console.log('\nEnhanced database population completed!');
+        console.log('\nFinal Summary:');
+        console.log(`- Books: ${books.length} classic and popular titles`);
+        console.log(`- Authors: 8 renowned authors (Fitzgerald, Austen, Orwell, etc.)`);
+        console.log(`- Users: ${users.length} diverse library users`);
+        console.log('- Reviews: Multiple reviews per book from different users');
+        console.log('- Reservations: Sample reservations created');
+        console.log('\nSafe to run multiple times - only creates missing data');
+        console.log('Rich dataset perfect for testing and demonstration');
         
     } catch (error) {
-        console.error('❌ Error populating database:', error);
+        console.error('Error populating database:', error);
     }
 }
 

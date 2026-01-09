@@ -1,6 +1,6 @@
 # Library Management System
 
-This is a library management system built with the MEAN (MongoDB, Express, Angular, Node.js) stack. 
+This is a library management system built with the PEAN (Postgres/Supabase, Express, Angular, Node.js) stack. 
 
 ## Running the project
 
@@ -17,15 +17,20 @@ This is a library management system built with the MEAN (MongoDB, Express, Angul
     npm install
     ```
 
-1.  Set your [Atlas URI connection string](https://docs.atlas.mongodb.com/getting-started/), database name and server port in `server/.env`. Make sure you replace the username and password placeholders with your own credentials.
+1.  Set your Supabase configuration and server port in `server/.env`. You can get these values from your Supabase project settings.
 
     **library/server/.env**
     ```
     PORT="5000"
-    DATABASE_URI="mongodb+srv://<username>:<password>@m0.kwqkoewm.mongodb.net"
-    DATABASE_NAME="library"
     SECRET="secret"
+    
+    # Supabase configuration
+    SUPABASE_URL="https://your-project.supabase.co"
+    SUPABASE_ANON_KEY="your-anon-key"
+    SUPABASE_SERVICE_KEY="your-service-key"
     ```
+
+    Note: Use `SUPABASE_SERVICE_KEY` for server-side operations that need to bypass Row Level Security (RLS).
 
 
 1. Start the **server** application.
@@ -53,8 +58,24 @@ Currently, the project has only API tests implemented with [`supertest`](https:/
 npm test
 ```
 
+Note: Tests use `SUPABASE_SERVICE_KEY` to bypass RLS for testing purposes.
+
 ## Pre-commit hook
 
 The project utilizes [Husky](https://typicode.github.io/husky/) to execute actions before every commit. The pre-commit hook, located in [.husky/pre-commit](./.husky/pre-commit), lints the code and runs the API tests.
 
-Use at your own risk; not a supported MongoDB product
+## Database Schema
+
+The application uses Supabase/Postgres with the following tables:
+- `books` - Book catalog with ISBN as primary key
+- `authors` - Author information
+- `users` - User accounts
+- `reviews` - Book reviews
+- `reservations` - Book reservations
+- `borrowed_books` - Borrowed book records
+- `book_authors` - Many-to-many relationship between books and authors
+- `book_genres` - Book genre associations
+- `book_attributes` - Additional book attributes
+- `author_aliases` - Author name aliases
+
+Use at your own risk; not a supported product

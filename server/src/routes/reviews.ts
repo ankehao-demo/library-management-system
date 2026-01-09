@@ -41,11 +41,10 @@ reviews.post('/', protectedRoute, async (req: AuthRequest, res) => {
     }
 
     try {
-        const { insertResult, updateResult } = await reviewsController.createReview(bookId, reviewBody, userName);
+        const result = await reviewsController.createReview(bookId, reviewBody, userName);
         return res.status(201).send({
             message: reviewsController.success.CREATED,
-            insertResult,
-            updateResult
+            insertedId: result.insertedId
         });
     } catch (error) {
         return res.status(500).send({message: reviewsController.errors.UNKNOWN_ERROR});

@@ -1,25 +1,9 @@
-import '../load-env-vars.js';
-import { connectToDatabase, databases } from '../database.js';
+console.log('Schema Validation Removal for Supabase/Postgres');
+console.log('================================================\n');
 
-const { DATABASE_URI } = process.env;
+console.log('Schema validation in Postgres is managed through database constraints.');
+console.log('To remove validation, you would need to alter the table constraints directly in Supabase.');
+console.log('\nThis script is no longer needed for Supabase/Postgres as validation is handled at the database level.');
+console.log('Use the Supabase dashboard or SQL migrations to modify constraints if needed.');
 
-console.log('Connecting to MongoDB Atlas...');
-await connectToDatabase(DATABASE_URI);
-const db = databases.library;
-console.log('Connected!\n');
-
-console.log('Disabling schema validation...');
-await db.command({
-    collMod: 'users',
-    validator: {},
-    validationLevel: 'off'
-});
-
-await db.command({
-    collMod: 'authors',
-    validator: {},
-    validationLevel: 'off'
-});
-
-console.log('Disabled');
 process.exit(0);
