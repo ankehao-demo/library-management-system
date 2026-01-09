@@ -3,8 +3,8 @@ import assert from 'assert';
 import { users, books, getBaseUrl, cleanDatabase } from '../utils/testing-shared.js';
 import BookController from '../controllers/books.js';
 
-let adminJWT;
-let userJWT;
+let adminJWT: string;
+let userJWT: string;
 
 const bookController = new BookController();
 

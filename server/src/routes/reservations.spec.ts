@@ -5,9 +5,9 @@ import IssueDetailsController from '../controllers/issue-details.js';
 import BookController from '../controllers/books.js';
 
 
-let adminJWT;
-let userJWT;
-let userId;
+let adminJWT: string;
+let userJWT: string;
+let userId: string;
 
 const issueDetailsController = new IssueDetailsController();
 const bookController = new BookController();
