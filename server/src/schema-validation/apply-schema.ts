@@ -1,73 +1,35 @@
-import '../load-env-vars.js';
-import { connectToDatabase, databases } from '../database.js';
+console.log('Schema Validation for Supabase/Postgres');
+console.log('=========================================\n');
 
-const { DATABASE_URI } = process.env;
+console.log('Schema validation is now handled by Postgres constraints defined in the Supabase schema.');
+console.log('\nThe following constraints are enforced at the database level:\n');
 
-console.log('Connecting to MongoDB Atlas...');
-await connectToDatabase(DATABASE_URI);
-const db = databases.library;
-console.log('Connected!\n');
+console.log('Users table:');
+console.log('  - name: VARCHAR, required, minimum 5 characters (CHECK constraint)');
+console.log('  - is_admin: BOOLEAN, required, defaults to false');
+console.log('');
 
-const results = [];
+console.log('Books table:');
+console.log('  - isbn: VARCHAR, primary key');
+console.log('  - title: VARCHAR, required');
+console.log('  - total_inventory: INTEGER, required, defaults to 0');
+console.log('');
 
-const userSchema = {
-    bsonType: 'object',
-    required: ['name', 'isAdmin'],
-    properties: {
-        name: {
-            bsonType: 'string',
-            minLength: 5,
-            description: 'must be a string and is required'
-        },
-        isAdmin: {
-            bsonType: 'bool',
-            description: 'must be a boolean and is required'
-        }
-    }
-};
+console.log('Reviews table:');
+console.log('  - rating: INTEGER, CHECK constraint (1-5)');
+console.log('  - book_isbn: VARCHAR, foreign key to books');
+console.log('');
 
-console.log('Applying schema validation for users...');
-const resultUsers = await db.command({
-    collMod: 'users',
-    validator: {
-        $jsonSchema: userSchema
-    },
-    validationLevel: 'strict',
-    validationAction: 'error'
-});
+console.log('Reservations table:');
+console.log('  - user_id: UUID, foreign key to users');
+console.log('  - book_isbn: VARCHAR, foreign key to books');
+console.log('');
 
-results.push(resultUsers);
+console.log('Borrowed Books table:');
+console.log('  - user_id: UUID, foreign key to users');
+console.log('  - book_isbn: VARCHAR, foreign key to books');
+console.log('  - returned: BOOLEAN, defaults to false');
+console.log('');
 
-// const authorSchema = {
-//     bsonType: 'object',
-//     required: ['name'],
-//     properties: {
-//         name: {
-//             bsonType: 'string',
-//             minLength: 5,
-//             description: 'must be a string and is required'
-//         },
-//         // TODO: Add the missing validation rules for the authorSchema
-//         // Hint: Look at the 'library.authors' collection in
-//         // the MongoDB Atlas UI
-//     }
-// };
-
-// console.log('Applying schema validation for authors...');
-// const resultAuthors = await db.command({
-//     // TODO: Modify the authors collection to apply the authorSchema
-//     // Hint: Look at line 30 in this file.
-// });
-
-// results.push(resultAuthors);
-
-
-const isStatusInvalid = (r) => r.ok!== 1;
-if (results.some(isStatusInvalid)) {
-    console.log(results);
-    console.error('Failed to enable schema validation!');
-    process.exit(1);
-} else {
-    console.log('Schema validation enabled!');
-    process.exit(0);
-}
+console.log('No additional schema validation needed - constraints are enforced by Postgres.');
+process.exit(0);

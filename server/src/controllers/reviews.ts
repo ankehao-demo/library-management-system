@@ -1,6 +1,5 @@
-import { collections } from '../database.js';
-import { Review } from '../models/review.js';
-import { ObjectId, InsertOneResult, UpdateResult } from 'mongodb';
+import { supabase } from '../database.js';
+import { Review, ReviewInsert } from '../models/review.js';
 
 class ReviewsController {
     errors = {
@@ -14,43 +13,56 @@ class ReviewsController {
         CREATED: 'Review created'
     };
 
-    // Get all reviews for a book
     public async getReviews(bookId: string): Promise<Review[]> {
-        const reviews = await collections?.reviews?.find({ bookId: bookId }).toArray();
-        return reviews;
+        const { data: reviews, error } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('book_isbn', bookId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching reviews:', error);
+            return [];
+        }
+
+        return reviews || [];
     }
 
-    // Create a new review
-    public async createReview(bookId: string, reviewBody: { text: string; rating: number; }, userName: string): Promise<{ insertResult: InsertOneResult, updateResult: UpdateResult }> {
-        const review = {
-            _id: null,
+    public async createReview(bookId: string, reviewBody: { text: string; rating: number; }, userName: string): Promise<{ insertedId: string }> {
+        const reviewInsert: ReviewInsert = {
+            book_isbn: bookId,
+            reviewer_name: userName,
             text: reviewBody?.text,
-            name: userName,
-            rating: reviewBody?.rating,
-            timestamp: (new Date()).getTime(),
-            bookId
-        } as Review;
+            rating: reviewBody?.rating
+        };
 
-        const insertResult = await collections?.reviews?.insertOne(review);
+        const { data, error } = await supabase
+            .from('reviews')
+            .insert(reviewInsert)
+            .select('id')
+            .single();
 
-        review._id = insertResult?.insertedId;
-        delete review.bookId;
+        if (error || !data) {
+            console.error('Error creating review:', error);
+            throw new Error(this.errors.UNKNOWN_ERROR);
+        }
 
-        const updateResult = await collections?.books?.updateOne({ _id: bookId }, {
-            $push: {
-                reviews: {
-                    $each: [ review ],
-                    $sort: { timestamp: -1 },
-                    $slice: 5
-                }
-            }
-        });
-
-        return { insertResult, updateResult };
+        return { insertedId: data.id };
     }
 
-    public async getReview(bookId: string, reviewId: string): Promise<Review> {
-        const review = await collections?.reviews?.findOne({ _id: new ObjectId(reviewId), bookId: bookId });
+    public async getReview(bookId: string, reviewId: string): Promise<Review | null> {
+        const { data: review, error } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('id', reviewId)
+            .eq('book_isbn', bookId)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching review:', error);
+            return null;
+        }
+
         return review;
     }
 }

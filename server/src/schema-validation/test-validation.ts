@@ -1,24 +1,29 @@
 import '../load-env-vars.js';
-import { connectToDatabase, collections } from '../database.js';
+import { connectToDatabase, supabase } from '../database.js';
 
-const { DATABASE_URI } = process.env;
-
-console.log('Connecting to MongoDB Atlas...');
-await connectToDatabase(DATABASE_URI);
+console.log('Connecting to Supabase...');
+await connectToDatabase();
 console.log('Connected!\n');
 
+console.log('Testing schema validation...');
+console.log('In Supabase/Postgres, validation is handled by database constraints.\n');
+
 try {
-    // eslint-disable-next-line
-    await collections?.users?.insertOne(<any>{
-        age: 25
+    // Try to insert a user with missing required fields
+    const { error } = await supabase.from('users').insert({
+        // Missing 'name' field which is required
     });
-}
-catch (error) {
-    console.log(error.message);
-    for (const validationMessage of error.errInfo.details.schemaRulesNotSatisfied) {
-        console.log(validationMessage);
+    
+    if (error) {
+        console.log('Validation error (expected):');
+        console.log(error.message);
+    } else {
+        console.log('No validation error - check your constraints');
     }
 }
+catch (error) {
+    console.log('Error:', error.message);
+}
 
-process.exit(1);
+process.exit(0);
 

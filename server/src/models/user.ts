@@ -1,7 +1,12 @@
-import { ObjectId } from 'mongodb';
-
 export interface User {
-    _id?: ObjectId;
+    id: string;
     name: string;
-    isAdmin?: boolean;
+    is_admin: boolean;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface UserInsert {
+    name: string;
+    is_admin?: boolean;
 }

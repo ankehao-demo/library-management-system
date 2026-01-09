@@ -1,6 +1,5 @@
-import { ObjectId } from 'mongodb';
-import { AuthorResponse } from '../models/author';
-import { collections } from '../database.js';
+import { AuthorResponse } from '../models/author.js';
+import { supabase } from '../database.js';
 
 export class AuthorController {
     errors = {
@@ -8,35 +7,45 @@ export class AuthorController {
         AUTHOR_ID_MISSING: 'Author id is missing'
     };
 
-    public async getAuthor(authorId: string): Promise<AuthorResponse> {
-        const author = await collections?.authors?.aggregate<AuthorResponse>([
-            {
-                $match: {
-                    _id: new ObjectId(authorId)
-                }
-            },
-            {
-                // Join the books collection to get the books written by this author
-                $lookup: {
-                    from: 'books', // Collection to join
-                    localField: 'books', // Field from this collection ("books" array of ids)
-                    foreignField: '_id', // Field from the joined "books" collection
-                    pipeline: [
-                        {
-                            // Project only the title and the isbn
-                            $project: {
-                                isbn: '$_id', // Rename _id to isbn
-                                _id: 0, // Exclude _id
-                                title: 1, // Include title
-                                cover: 1, // Include cover
-                            }
-                        }
-                    ],
-                    as: 'books' // Store the joined result in the books field
-                }
-            }
-        ]).toArray();
+    public async getAuthor(authorId: string): Promise<AuthorResponse | null> {
+        const { data: author, error } = await supabase
+            .from('authors')
+            .select(`
+                *,
+                author_aliases (
+                    alias
+                ),
+                book_authors (
+                    books (
+                        isbn,
+                        title,
+                        cover_url
+                    )
+                )
+            `)
+            .eq('id', authorId)
+            .single();
 
-        return author && author[0];
+        if (error || !author) {
+            return null;
+        }
+
+        const aliases = author.author_aliases?.map((a: { alias: string }) => a.alias) || [];
+        const books = author.book_authors?.map((ba: { books: { isbn: string; title: string; cover_url?: string } }) => ({
+            isbn: ba.books?.isbn,
+            title: ba.books?.title,
+            cover_url: ba.books?.cover_url
+        })).filter((b: { isbn: string }) => b.isbn) || [];
+
+        return {
+            id: author.id,
+            name: author.name,
+            sanitized_name: author.sanitized_name,
+            bio: author.bio,
+            created_at: author.created_at,
+            updated_at: author.updated_at,
+            aliases,
+            books
+        };
     }
 }

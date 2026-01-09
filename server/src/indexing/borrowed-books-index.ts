@@ -1,61 +1,41 @@
 import '../load-env-vars.js';
-import { connectToDatabase, collections } from '../database.js';
-import { BorrowedBook } from '../models/issue-detail.js';
-import { ObjectId } from 'mongodb';
+import { connectToDatabase, supabase } from '../database.js';
 
-const { DATABASE_URI } = process.env;
-
-console.log('Connecting to MongoDB Atlas...');
-const client = await connectToDatabase(DATABASE_URI);
+console.log('Connecting to Supabase...');
+await connectToDatabase();
 console.log('Connected!\n');
 
-console.log('BEFORE creating the index\n');
-await explainBorrowedBooksQuery();
+console.log('Borrowed Books Index Management for Supabase/Postgres');
+console.log('=====================================================\n');
 
-/**
- * Create the index to support the following query:
- * issueDetails.find({
- *    'user._id': userID,
- *   borrowDate: { $gte: date },
- * }, {
- *  sort: { returnedDate: -1 }
- * })
- */
-await collections?.issueDetails?.createIndex({
-    // Equality
-    'user._id': 1,
-    // Sort
-    returnedDate: 1,
-    // Range
-    borrowDate: 1,
-});
+console.log('In Supabase/Postgres, indexes are managed through SQL migrations.');
+console.log('The following indexes are recommended for the borrowed_books table:\n');
 
-console.log('\n-----------------------------\n');
-console.log('AFTER creating the index\n');
-await explainBorrowedBooksQuery();
+console.log('1. Index on user_id for user-specific queries:');
+console.log('   CREATE INDEX idx_borrowed_books_user_id ON borrowed_books(user_id);\n');
 
-await collections?.issueDetails?.dropIndexes();
-await client.close();
-process.exit();
+console.log('2. Composite index for user + borrow_date queries:');
+console.log('   CREATE INDEX idx_borrowed_books_user_borrow_date ON borrowed_books(user_id, borrow_date DESC);\n');
 
-async function explainBorrowedBooksQuery() {
-    /**
-     * Find all books that have been borrowed by the user with the specified ID since April this year.
-     * Sort the results by the date they were returned in descending order.
-     */
-    const explainPlan = await collections?.issueDetails?.find<BorrowedBook>({
-        'user._id': new ObjectId('65133d20e861a187094672a7'),
-        borrowDate: { $gte: new Date('2024-04-01') }
-    }, {
-        sort: { returnedDate: -1 }
-    }).explain();
+console.log('3. Index on returned_date for sorting:');
+console.log('   CREATE INDEX idx_borrowed_books_returned_date ON borrowed_books(returned_date DESC);\n');
 
-    const inputStage = explainPlan.queryPlanner.winningPlan.inputStage;
-    console.log(`Winning plan stage: ${inputStage.stage}`);
-    
-    const index = inputStage.indexName;
-    console.log(index ? `Index used: ${index}` : 'No index used');
+console.log('To check existing indexes, run:');
+console.log('   SELECT indexname, indexdef FROM pg_indexes WHERE tablename = \'borrowed_books\';\n');
 
-    console.log(`Total documents examined: ${explainPlan.executionStats.totalDocsExamined}`);
-    console.log(`Number of documents returned: ${explainPlan.executionStats.nReturned}`);
+// Example query to demonstrate Supabase usage
+console.log('Testing a sample query...');
+const { data, error } = await supabase
+    .from('borrowed_books')
+    .select('*')
+    .eq('returned', false)
+    .order('borrow_date', { ascending: false })
+    .limit(5);
+
+if (error) {
+    console.log('Query error:', error.message);
+} else {
+    console.log(`Found ${data?.length || 0} active borrowed books`);
 }
+
+process.exit(0);

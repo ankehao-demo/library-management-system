@@ -1,8 +1,5 @@
-import { DeleteResult, InsertOneResult, UpdateResult } from 'mongodb';
-import { Book } from '../models/book';
-import { collections } from '../database.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import getEmbeddings from '../embeddings/index.js';
+import { Book, BookInsert } from '../models/book.js';
+import { supabase } from '../database.js';
 
 class BookController {
     errors = {
@@ -27,111 +24,216 @@ class BookController {
             limit = 100;
         }
 
-        const bookCursor = collections?.books?.find({});
-        const books = await bookCursor.limit(limit).skip(skip).toArray();
+        const { data: books, error } = await supabase
+            .from('books')
+            .select('*')
+            .range(skip, skip + limit - 1);
 
-        return books;
-    }
-
-    public async getBook(bookId: string): Promise<Book> {
-        /**
-         * Initial Code
-         * Task: Optimise the query to take advantage of the already computed field.
-         * Hint: Take a look at the shape of the Book documents using MongoDB Compass.
-         */
-        const books = await collections?.books?.aggregate<Book>([
-            {
-                $match: {
-                    _id: bookId
-                },
-            },
-            {
-                $lookup: {
-                    from: 'issueDetails',
-                    localField: '_id',
-                    foreignField: 'book._id',
-                    pipeline: [
-                        {
-                            $match: {
-                                $or: [
-                                    { recordType: 'reservation' },
-                                    { recordType: 'borrowedBook', returned: false }
-                                ]
-                            }
-                        }
-                    ],
-                    as: 'details'
-                }
-            },
-            {
-                $set: {
-                    available: {
-                        $subtract: ['$totalInventory', { $size: '$details' }]
-                    }
-                }
-            },
-            {
-                $unset: 'details'
-            },
-        ]).toArray();
-
-        if (!books?.length) {
-            return;
+        if (error) {
+            console.error('Error fetching books:', error);
+            return [];
         }
 
-        return books[0];
+        return books || [];
+    }
+
+    public async getBook(bookId: string): Promise<Book | undefined> {
+        const { data: book, error } = await supabase
+            .from('books')
+            .select(`
+                *,
+                book_authors (
+                    author_id,
+                    authors (
+                        id,
+                        name
+                    )
+                ),
+                book_genres (
+                    genre
+                ),
+                reviews (
+                    id,
+                    reviewer_name,
+                    text,
+                    rating,
+                    created_at
+                )
+            `)
+            .eq('isbn', bookId)
+            .single();
+
+        if (error || !book) {
+            return undefined;
+        }
+
+        const { count: reservationCount } = await supabase
+            .from('reservations')
+            .select('*', { count: 'exact', head: true })
+            .eq('book_isbn', bookId);
+
+        const { count: borrowedCount } = await supabase
+            .from('borrowed_books')
+            .select('*', { count: 'exact', head: true })
+            .eq('book_isbn', bookId)
+            .eq('returned', false);
+
+        const totalHeld = (reservationCount || 0) + (borrowedCount || 0);
+        const available = book.total_inventory - totalHeld;
+
+        const authors = book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
+            id: ba.authors?.id,
+            name: ba.authors?.name
+        })).filter((a: { id: string; name: string }) => a.id) || [];
+
+        const genres = book.book_genres?.map((bg: { genre: string }) => bg.genre) || [];
+
+        return {
+            ...book,
+            authors,
+            genres,
+            available,
+            reviews: book.reviews || []
+        };
     }
 
     public async searchBooks(query: string): Promise<Book[]> {
-        const books = await collections?.books?.find(
-            {
-                $or: [
-                    {title: {$regex: new RegExp(query, 'i')}},
-                    {'authors.name': {$regex: new RegExp(query, 'i')}},
-                ]
-            }).limit(25).toArray();
-        return books;
+        const { data: books, error } = await supabase
+            .from('books')
+            .select(`
+                *,
+                book_authors (
+                    authors (
+                        id,
+                        name
+                    )
+                )
+            `)
+            .or(`title.ilike.%${query}%`)
+            .limit(25);
+
+        if (error) {
+            console.error('Error searching books:', error);
+            return [];
+        }
+
+        return (books || []).map(book => ({
+            ...book,
+            authors: book.book_authors?.map((ba: { authors: { id: string; name: string } }) => ({
+                id: ba.authors?.id,
+                name: ba.authors?.name
+            })).filter((a: { id: string; name: string }) => a.id) || []
+        }));
     }
 
-    public async createBook(book: Book): Promise<InsertOneResult> {
-        const result = await collections?.books?.insertOne(book);
+    public async createBook(book: Book): Promise<{ isbn: string }> {
+        const bookInsert: BookInsert = {
+            isbn: book.isbn,
+            title: book.title,
+            year: book.year,
+            cover_url: book.cover_url,
+            pages: book.pages,
+            synopsis: book.synopsis,
+            publisher: book.publisher,
+            long_title: book.long_title,
+            language: book.language,
+            binding: book.binding,
+            total_inventory: book.total_inventory || 0,
+            book_of_month: book.book_of_month
+        };
 
-        if (!result?.insertedId) {
+        const { data, error } = await supabase
+            .from('books')
+            .insert(bookInsert)
+            .select('isbn')
+            .single();
+
+        if (error || !data) {
+            console.error('Error creating book:', error);
             throw new Error(this.errors.UNKNOWN_INSERT_ERROR);
         }
 
-        return result;
+        if (book.authors && book.authors.length > 0) {
+            const bookAuthors = book.authors.map((author, index) => ({
+                book_isbn: book.isbn,
+                author_id: author.id,
+                display_order: index
+            }));
+
+            await supabase.from('book_authors').insert(bookAuthors);
+        }
+
+        if (book.genres && book.genres.length > 0) {
+            const bookGenres = book.genres.map(genre => ({
+                book_isbn: book.isbn,
+                genre
+            }));
+
+            await supabase.from('book_genres').insert(bookGenres);
+        }
+
+        return { isbn: data.isbn };
     }
 
-    public async updateBook(bookId: string, book: Book): Promise<UpdateResult> {
-        const result = await collections?.books?.updateOne({ _id: bookId }, { $set: book });
+    public async updateBook(bookId: string, book: Partial<Book>): Promise<{ updated: boolean }> {
+        const updateData: Partial<BookInsert> = {};
+        
+        if (book.title !== undefined) updateData.title = book.title;
+        if (book.year !== undefined) updateData.year = book.year;
+        if (book.cover_url !== undefined) updateData.cover_url = book.cover_url;
+        if (book.pages !== undefined) updateData.pages = book.pages;
+        if (book.synopsis !== undefined) updateData.synopsis = book.synopsis;
+        if (book.publisher !== undefined) updateData.publisher = book.publisher;
+        if (book.long_title !== undefined) updateData.long_title = book.long_title;
+        if (book.language !== undefined) updateData.language = book.language;
+        if (book.binding !== undefined) updateData.binding = book.binding;
+        if (book.total_inventory !== undefined) updateData.total_inventory = book.total_inventory;
+        if (book.book_of_month !== undefined) updateData.book_of_month = book.book_of_month;
 
-        if (result.modifiedCount === 0) {
+        const { error, count } = await supabase
+            .from('books')
+            .update(updateData)
+            .eq('isbn', bookId);
+
+        if (error) {
+            console.error('Error updating book:', error);
             throw new Error(this.errors.UNKNOWN_UPDATE_ERROR);
         }
 
-        return result;
-    }
-
-    public async deleteBook(bookId: string): Promise<DeleteResult> {
-        const result = await collections?.books?.deleteOne({ _id: bookId });
-
-        if (result.deletedCount === 0) {
+        if (count === 0) {
             throw new Error(this.errors.UNKNOWN_UPDATE_ERROR);
         }
 
-        if (!result) {
+        return { updated: true };
+    }
+
+    public async deleteBook(bookId: string): Promise<{ deleted: boolean }> {
+        await supabase.from('book_authors').delete().eq('book_isbn', bookId);
+        await supabase.from('book_genres').delete().eq('book_isbn', bookId);
+        await supabase.from('book_attributes').delete().eq('book_isbn', bookId);
+
+        const { error, count } = await supabase
+            .from('books')
+            .delete()
+            .eq('isbn', bookId);
+
+        if (error) {
+            console.error('Error deleting book:', error);
             throw new Error(this.errors.UNKNOWN_DELETE_ERROR);
         }
 
-        return result;
+        if (count === 0) {
+            throw new Error(this.errors.UNKNOWN_DELETE_ERROR);
+        }
+
+        return { deleted: true };
     }
 
-    public incrementBookInventory(bookId: string, count: number = 1): Promise<UpdateResult> {
+    public async incrementBookInventory(bookId: string, count: number = 1): Promise<{ updated: boolean }> {
         return this.updateBookInventory(bookId, count);
     }
 
-    public decrementBookInventory(bookId: string, count: number = 1): Promise<UpdateResult> {
+    public async decrementBookInventory(bookId: string, count: number = 1): Promise<{ updated: boolean }> {
         return this.updateBookInventory(bookId, -count);
     }
 
@@ -142,19 +244,34 @@ class BookController {
             throw new Error(this.errors.NOT_FOUND);
         }
 
-        if (bookData?.available <= 0) {
+        if ((bookData.available ?? 0) <= 0) {
             throw new Error(this.errors.NOT_AVAILABLE);
         }
 
         return bookData;
     }
 
-    private updateBookInventory(bookId: string, count: number): Promise<UpdateResult> {
-        const result = collections?.books?.updateOne(
-            { _id: bookId },
-            { $inc: { available: count } }
-        );
-        return result;
+    private async updateBookInventory(bookId: string, count: number): Promise<{ updated: boolean }> {
+        const { data: book, error: fetchError } = await supabase
+            .from('books')
+            .select('total_inventory')
+            .eq('isbn', bookId)
+            .single();
+
+        if (fetchError || !book) {
+            throw new Error(this.errors.NOT_FOUND);
+        }
+
+        const { error } = await supabase
+            .from('books')
+            .update({ total_inventory: book.total_inventory + count })
+            .eq('isbn', bookId);
+
+        if (error) {
+            throw new Error(this.errors.UNKNOWN_UPDATE_ERROR);
+        }
+
+        return { updated: true };
     }
 }
 

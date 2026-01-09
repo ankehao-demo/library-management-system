@@ -13,8 +13,8 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-await connectToDatabase(process.env.DATABASE_URI);
-console.log('Connected to database!');
+await connectToDatabase();
+console.log('Connected to Supabase!');
 
 app.get('/', (_, res) => res.sendStatus(200));
 
