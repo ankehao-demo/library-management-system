@@ -58,6 +58,17 @@ npm test
 
 The project utilizes [Husky](https://typicode.github.io/husky/) to execute actions before every commit. The pre-commit hook, located in [.husky/pre-commit](./.husky/pre-commit), lints the code and runs the API tests.
 
+## Populating the Database
+
+To populate the database with sample data (books, authors, users, reviews), run the populate script from the server directory while the server is running:
+
+**library/server/**
+```
+node populate-database-idempotent.js
+```
+
+This script is idempotent and safe to run multiple times - it only creates data that doesn't already exist.
+
 ## Database Schema
 
 The application uses Supabase (PostgreSQL) with the following tables:

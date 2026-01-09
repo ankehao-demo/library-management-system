@@ -10,7 +10,7 @@ import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
-dotenv.config({ path: './server/.env' });
+dotenv.config({ path: './.env' });
 
 const BASE_URL = 'http://localhost:5001';
 const SUPABASE_URL = process.env.SUPABASE_URL;
