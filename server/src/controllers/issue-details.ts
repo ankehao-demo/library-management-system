@@ -60,8 +60,8 @@ class ReservationsController {
 
         return (data || []).map(r => ({
             ...r,
-            book: r.books ? { isbn: r.books.isbn, title: r.books.title } : undefined,
-            user: r.users ? { id: r.users.id, name: r.users.name } : undefined
+            book: r.books ? { _id: r.books.isbn, isbn: r.books.isbn, title: r.books.title } : undefined,
+            user: r.users ? { _id: r.users.id, id: r.users.id, name: r.users.name } : undefined
         }));
     }
 
@@ -88,8 +88,8 @@ class ReservationsController {
 
         return {
             ...data,
-            book: data.books ? { isbn: data.books.isbn, title: data.books.title } : undefined,
-            user: data.users ? { id: data.users.id, name: data.users.name } : undefined
+            book: data.books ? { _id: data.books.isbn, isbn: data.books.isbn, title: data.books.title } : undefined,
+            user: data.users ? { _id: data.users.id, id: data.users.id, name: data.users.name } : undefined
         };
     }
 
@@ -125,8 +125,8 @@ class ReservationsController {
 
         const mappedData = (data || []).map(r => ({
             ...r,
-            book: r.books ? { isbn: r.books.isbn, title: r.books.title } : undefined,
-            user: r.users ? { id: r.users.id, name: r.users.name } : undefined
+            book: r.books ? { _id: r.books.isbn, isbn: r.books.isbn, title: r.books.title } : undefined,
+            user: r.users ? { _id: r.users.id, id: r.users.id, name: r.users.name } : undefined
         }));
 
         return {
@@ -159,8 +159,8 @@ class ReservationsController {
 
         return {
             ...data,
-            book: data.books ? { isbn: data.books.isbn, title: data.books.title } : undefined,
-            user: data.users ? { id: data.users.id, name: data.users.name } : undefined
+            book: data.books ? { _id: data.books.isbn, isbn: data.books.isbn, title: data.books.title } : undefined,
+            user: data.users ? { _id: data.users.id, id: data.users.id, name: data.users.name } : undefined
         };
     }
 
@@ -331,8 +331,8 @@ class ReservationsController {
 
         return (data || []).map(b => ({
             ...b,
-            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined,
-            user: b.users ? { id: b.users.id, name: b.users.name } : undefined
+            book: b.books ? { _id: b.books.isbn, isbn: b.books.isbn, title: b.books.title } : undefined,
+            user: b.users ? { _id: b.users.id, id: b.users.id, name: b.users.name } : undefined
         }));
     }
 
@@ -369,8 +369,8 @@ class ReservationsController {
 
         const mappedData = (data || []).map(b => ({
             ...b,
-            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined,
-            user: b.users ? { id: b.users.id, name: b.users.name } : undefined
+            book: b.books ? { _id: b.books.isbn, isbn: b.books.isbn, title: b.books.title } : undefined,
+            user: b.users ? { _id: b.users.id, id: b.users.id, name: b.users.name } : undefined
         }));
 
         return {
@@ -441,8 +441,8 @@ class ReservationsController {
 
         return (data || []).map(b => ({
             ...b,
-            book: b.books ? { isbn: b.books.isbn, title: b.books.title } : undefined,
-            user: b.users ? { id: b.users.id, name: b.users.name } : undefined
+            book: b.books ? { _id: b.books.isbn, isbn: b.books.isbn, title: b.books.title } : undefined,
+            user: b.users ? { _id: b.users.id, id: b.users.id, name: b.users.name } : undefined
         }));
     }
 }
