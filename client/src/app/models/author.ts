@@ -15,4 +15,24 @@ export interface Author {
         isbn: string;
         cover: string;
     }>;
+
+    /**
+     * Author's birth year
+     */
+    birthYear?: number;
+
+    /**
+     * Author's nationality
+     */
+    nationality?: string;
+
+    /**
+     * Author's official website
+     */
+    website?: string;
+
+    /**
+     * Literary awards received
+     */
+    awards?: Array<string>;
 }

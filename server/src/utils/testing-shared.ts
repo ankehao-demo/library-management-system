@@ -64,11 +64,19 @@ export const users = {
         _id: new ObjectId('64d4c964f0d056ea6bf0f3d8'),
         name: 'OldSchool Alligator',
         isAdmin: true,
+        email: 'oldschool.alligator@library.test',
+        membershipType: 'Standard',
+        maxBorrowLimit: 5,
+        active: true,
         jwt: ''
     },
     user1: {
         _id: new ObjectId('64d4c7505bd483105c48991d'),
         name: 'Rowdy Hyena',
+        email: 'rowdy.hyena@library.test',
+        membershipType: 'Standard',
+        maxBorrowLimit: 5,
+        active: true,
         jwt: ''
     }
 };
@@ -96,7 +104,10 @@ const book: Book = {
         name: 'Amazon Customer',
         rating: 5,
         timestamp: 1600000000000,
+        verified: false,
+        status: 'Pending',
     }],
+    condition: 'Good',
 };
 
 const bookOneCopy: Book = {
@@ -125,12 +136,17 @@ const bookOneCopy: Book = {
         name: 'SciFiEnthusiast',
         rating: 4,
         timestamp: 1678453200000,
+        verified: false,
+        status: 'Pending',
     }, {
         text: 'A must-read for anyone fascinated by the mysteries of the universe.',
         name: 'SpaceTraveler',
         rating: 5,
         timestamp: 1678528800000,
+        verified: false,
+        status: 'Pending',
     }],
+    condition: 'Good',
 };
 
 const notAvailable: Book = {
@@ -159,12 +175,17 @@ const notAvailable: Book = {
         name: 'ThrillerFanatic',
         rating: 5,
         timestamp: 1685624400000,
+        verified: false,
+        status: 'Pending',
     }, {
         text: 'Sophia Harper is a master of suspense.',
         name: 'MysteryEnthusiast',
         rating: 4,
         timestamp: 1685818800000,
+        verified: false,
+        status: 'Pending',
     }],
+    condition: 'Good',
 };
 
 export const books = {

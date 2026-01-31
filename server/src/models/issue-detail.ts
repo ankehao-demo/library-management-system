@@ -41,6 +41,26 @@ interface BorrowedBook extends IssueDetailBase {
      * Boolean indicating if the book was returned.
      */
     returned: boolean;
+
+    /**
+     * Number of times the borrowed book has been renewed
+     */
+    renewalCount?: number;
+
+    /**
+     * Late fee amount in dollars
+     */
+    lateFee?: number;
+
+    /**
+     * Administrative notes about the issue
+     */
+    notes?: string;
+
+    /**
+     * Whether reminder notification has been sent
+     */
+    notificationSent?: boolean;
 }
 
 interface Reservation extends IssueDetailBase {

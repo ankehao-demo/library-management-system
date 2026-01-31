@@ -60,4 +60,38 @@ export interface Book {
      * Added for the Search Lab
      */
     bookOfTheMonth?: boolean;
+
+    /**
+     * Edition information (e.g., "1st Edition", "Revised")
+     */
+    edition?: string;
+
+    /**
+     * Physical condition of the book
+     */
+    condition: string;
+
+    /**
+     * Physical location in library
+     */
+    location?: {
+        section: string;
+        shelf: string;
+        position?: number;
+    };
+
+    /**
+     * Date when book was acquired by library
+     */
+    acquisitionDate?: Date;
+
+    /**
+     * Purchase or replacement price
+     */
+    price?: number;
+
+    /**
+     * Custom tags for categorization
+     */
+    tags?: Array<string>;
 }

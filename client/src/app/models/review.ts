@@ -6,4 +6,9 @@ export interface Review {
     name: string;
     rating: number;
     timestamp: number;
+    userId?: string;
+    verified?: boolean;
+    helpful?: number;
+    status?: string;
+    sentiment?: string;
 }

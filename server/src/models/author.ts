@@ -14,6 +14,26 @@ export interface Author {
      * Array of ISBNs of books written by this author. Reference to the books collection.
      */
     books: Array<string>;
+
+    /**
+     * Author's birth year
+     */
+    birthYear?: number;
+
+    /**
+     * Author's nationality or country of origin
+     */
+    nationality?: string;
+
+    /**
+     * Author's official website URL
+     */
+    website?: string;
+
+    /**
+     * List of literary awards received
+     */
+    awards?: Array<string>;
 }
 
 /**
