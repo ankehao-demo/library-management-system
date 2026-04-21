@@ -1,26 +1,48 @@
 import dotenv from 'dotenv';
-import { MongoClient } from 'mongodb';
+import { AnyBulkWriteOperation, Document, MongoClient, WithId } from 'mongodb';
 
 dotenv.config();
 
+interface BookAttribute {
+    key: string;
+    value: string;
+}
+
+interface BookDocument extends Document {
+    attributes?: BookAttribute[];
+    synopsis?: string;
+}
+
+interface SetFields {
+    attributes: BookAttribute[];
+    publisher?: string;
+    binding?: string;
+    language?: string;
+    longTitle?: string;
+    synopsis?: string;
+}
+
 const URI = process.env.DATABASE_URI;
+if (!URI) {
+    throw new Error('DATABASE_URI environment variable is not set');
+}
 const client = new MongoClient(URI);
 await client.connect();
 console.log('Connected successfully to the database');
 
 const db = client.db('library');
-const collection = db.collection('books');
+const collection = db.collection<BookDocument>('books');
 
 const books = await collection.find().toArray();
 
 const batchSize = 5000;
 let i = 0;
 while (i < books.length - 1) {
-    const updates = [];
+    const updates: AnyBulkWriteOperation<BookDocument>[] = [];
     for (let j = i; j < i + batchSize; j++) {
         const book = books[j];
         if (book) {
-            const update = await migrate(book);
+            const update = migrate(book);
             updates.push(update);
         }
     }
@@ -30,13 +52,9 @@ while (i < books.length - 1) {
     i = i + batchSize;
 }
 
-async function migrate(book) {
-    if (!book) {
-        return;
-    }
-
-    const attributes = book?.attributes || [];
-    const setFields = {
+function migrate(book: WithId<BookDocument>): AnyBulkWriteOperation<BookDocument> {
+    const attributes: BookAttribute[] = book?.attributes || [];
+    const setFields: SetFields = {
         'attributes': attributes
     };
 
@@ -122,7 +140,7 @@ async function migrate(book) {
         setFields['synopsis'] = synopsis;
     }
 
-    const update = {
+    const update: AnyBulkWriteOperation<BookDocument> = {
         updateOne: {
             filter: {
                 _id: book._id
@@ -131,9 +149,9 @@ async function migrate(book) {
                 $set: setFields,
             }
         }
-    }
+    };
 
     return update;
 }
- 
+
 await client.close();
